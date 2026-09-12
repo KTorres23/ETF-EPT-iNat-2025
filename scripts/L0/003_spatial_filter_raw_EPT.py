@@ -1,4 +1,5 @@
 # 003_spatial_filter_raw_EPT.py
+# ETF-EPT-iNat-2025 Data description
 # Karina Torres
 # Southern Illinois University
 # github.com/KTorres23

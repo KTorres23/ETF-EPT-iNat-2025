@@ -1,5 +1,6 @@
 ---
 title: 200_curate_acknowledgements.qmd
+subtitle: ETF-EPT-iNat-2025 Data description
 author: 
     - name: Karina Torres
       role: Author

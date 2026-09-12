@@ -1,5 +1,6 @@
 ---
 title: 001_retrieve_EPT_obs_iNat_API.qmd
+subtitle: ETF-EPT-iNat-2025 Data description
 author: 
     - name: Karina Torres
       role: Author

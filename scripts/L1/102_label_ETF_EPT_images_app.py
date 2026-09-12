@@ -1,4 +1,5 @@
 # 102_label_ETF_EPT_images_app.py
+# ETF-EPT-iNat-2025 Data description
 # Karina Torres
 # Southern Illinois University
 # github.com/KTorres23

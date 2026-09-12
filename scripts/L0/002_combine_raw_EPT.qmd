@@ -1,5 +1,6 @@
 ---
 title: 002_combine_raw_EPT.qmd
+subtitle: ETF-EPT-iNat-2025 Data description
 author: 
     - name: Karina Torres
       role: Author
