@@ -1,0 +1,98 @@
+---
+title: 101_combine_raw_EPT.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script combines the raw observations of 3 aquatic insect taxon pulled from the iNaturalist API, including the orders Ephemeroptera, Plecoptera, and Trichoptera. The data is saved as a CSV and SHP
+date: 2026-09-12 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+# Set up environment
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here, officer, flextable, sf)
+
+# Set working directory
+here::i_am("scripts/L1/101_combine_raw_EPT.qmd")
+
+# Point to directories
+L0_data_dir <- here("data", "L0") # L0 data
+L1_data_dir <- here("data", "L1") # L1 data
+```
+
+# Read data
+
+Duplicates were accidentally created when pulling data from the API because
+API pulls were done in chunks or paused, leading to some accidental overlaps
+and re-pulls of the same data. Optionally, [examine duplicate records](#check-dupes)
+
+```{r}
+#| label: read-raw-data
+# Read all data
+raw_e <- read_csv(here(L0_data_dir, "001a_obs_ephemeroptera.csv"))
+raw_p <- read_csv(here(L0_data_dir, "001b_obs_plecoptera.csv"))
+raw_t <- read_csv(here(L0_data_dir, "001c_obs_trichoptera.csv"))
+
+# Combine into one dataset
+raw_all <- bind_rows(raw_e, raw_p, raw_t) |>
+  distinct() # remove duplicates
+
+# Clean up environment & memory
+rm(raw_e, raw_p, raw_t)
+```
+
+
+```{r}
+#| label: check-dupes
+# raw_all <- bind_rows(raw_e, raw_p, raw_t) # Combine all datasets
+# n_raw_all <- nrow(raw_all) # Get # of observations
+
+# distinct_all <- distinct(raw_all) # Remove duplicates
+# n_distinct_all <- nrow(distinct_all) # get # of distinct observations
+
+# cat("Dupes removed: %d", (n_raw_all - n_distinct_all))
+
+# dupes <- raw_all |> # examine dupes if needed
+#  group_by_all() |>
+#  filter(n() > 1) |>
+#  ungroup()
+
+# rm(raw_e, raw_p, raw_t, raw_all, n_raw_all, n_distinct_all, dupes) #clean memory
+```
+
+# Export data
+
+```{r}
+#| label: export-data
+# Get lat/long info for SHP
+EPT_sf <- raw_all |>
+  select(id, location) |>
+  filter(!is.na(location)) |>
+  mutate(
+    lat = as.numeric(str_extract(location, "^[^,]+")),
+    long = as.numeric(str_extract(location, "[^,]+$")),
+  ) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+# Save raw EPT observation data as CSV
+write_csv(raw_all, here(L1_data_dir, "101a_raw_EPT_obs.csv"))
+
+# Create directory to save SHP
+dir.create(here(L1_data_dir, "101b_raw_EPT_obs_shp"))
+st_write(
+  EPT_sf,
+  here(L1_data_dir, "101b_raw_EPT_obs_shp", "101b_raw_EPT_obs_shp.shp")
+)
+```

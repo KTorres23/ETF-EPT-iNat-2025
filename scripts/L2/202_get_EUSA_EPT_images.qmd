@@ -1,0 +1,459 @@
+---
+title: 202_get_EUSA_EPT_images.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script ....
+date: 2026-09-12 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+
+# Set up environment
+
+```{r}
+#| label: debug-dependencies
+#| include: false
+# If facing issues with flextable::autofit(), run this block to fix
+# dependencies with installation of the flextable and systemfonts packages
+
+remove.packages("flextable")
+remove.packages("systemfonts")
+
+install.packages("flextable", dependencies = T)
+install.packages("systemfonts")
+
+library(flextable)
+library(systemfonts)
+```
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here, officer, flextable, sf)
+
+# Set working directory
+here::i_am("scripts/L2/202_get_EUSA_EPT_images.qmd")
+
+# Point to directories
+L0_data_dir <- here("data", "L0") # L0 data
+L1_data_dir <- here("data", "L1") # L1 data
+L2_data_dir <- here("data", "L2") # L2 data
+```
+
+# Read data
+
+
+```{r}
+#| label: read-obs-data
+# Get raw EPT data from iNat API
+EPT <- c("ephemeroptera", "plecoptera", "trichoptera")
+
+all_spp_ids <- list()
+
+for (spp in seq_along(EPT)) {
+  # read in data
+  spp_data <- readRDS(here(
+    L0_data_dir,
+    paste0("001", letters[spp], "_obs_", EPT[spp], ".rds")
+  ))
+
+  all_spp_ids[[spp]] <- spp_data
+
+  rm(spp_data)
+  gc()
+}
+combined_ids <- bind_rows(all_spp_ids) # 615,756 rows
+rm(all_spp_ids)
+
+# Filter down to only EPT obs within study extent
+clean_EUSA_EPT <- read_csv(here(L2_data_dir, "201a_clean_EUSA_EPT_obs.csv")) |>
+  inner_join(combined_ids, by = c("id", "taxon.name")) |>
+  distinct(id, .keep_all = TRUE)
+
+# Save temp file
+saveRDS(
+  clean_EUSA_EPT,
+  file = here(L2_data_dir, "202a_images_clean_EUSA_EPT_obs.rds")
+)
+
+rm(combined_ids)
+gc()
+```
+
+
+```{r}
+#| label: read-temp-file
+clean_EUSA_EPT <- readRDS(here(
+  L2_data_dir,
+  "202a_images_clean_EUSA_EPT_obs.rds"
+))
+```
+
+
+# Download EPT images
+
+https://registry.opendata.aws/inaturalist-open-data/
+
+https://github.com/inaturalist/inaturalist-open-data/tree/documentation
+
+
+```{r}
+#| label: prepare-data
+#### Write a functino to download all images for each observation
+# Create separate folder for each taxon order
+# each pic should be "spp_obs_#######_1/2/3.jpg", where:
+# > spp is the initial of the insect order (e.g., E, P, T)
+# > ##### is the number of the observation
+# > 1/2/3 is the image num. associated with the obs (if multiple imgs per obs)
+
+#dest_file <- file.path(download_dir, paste0(spp, "obs_", id, "_", x, ".jpg"))
+
+# Create export directories
+image_path <- file.path("data", "L2", "202c_EUSA_EPT_images")
+image_dir <- here(image_path)
+e_dir <- here(image_path, "ephe_imgs")
+p_dir <- here(image_path, "plec_imgs")
+t_dir <- here(image_path, "tric_imgs")
+dir_list <- c(image_dir, e_dir, p_dir, t_dir)
+ept_dirs <- c(e_dir, p_dir, t_dir)
+
+for (dir in seq_along(dir_list)) {
+  if (!file.exists(dir_list[dir])) {
+    dir.create(dir_list[dir])
+    cat(sprintf("\nThe following directory was created: %s", dir_list[dir]))
+  }
+}
+
+# iNat Taxon ID
+EPT_id <- c("48011", "47504", "62164")
+EPT <- c("ephemeroptera", "plecoptera", "trichoptera")
+
+MakePattern <- function(data) {
+  string <- paste0("(^|,|/)", data, "(,|/|$)")
+}
+
+
+processed_data <- clean_EUSA_EPT |>
+  mutate(
+    # Determine taxa order classification
+    species_label = case_when(
+      str_to_lower(taxon.name) == EPT[1] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[1])) ~ EPT[1],
+      str_to_lower(taxon.name) == EPT[2] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[2])) ~ EPT[2],
+      str_to_lower(taxon.name) == EPT[3] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[3])) ~ EPT[3],
+      .default = NA_character_
+    ),
+    # Determine export directory
+    save_dir = case_when(
+      species_label == EPT[1] ~ ept_dirs[1],
+      species_label == EPT[2] ~ ept_dirs[2],
+      species_label == EPT[3] ~ ept_dirs[3],
+      TRUE ~ image_dir # Fallback directory
+    )
+  ) |>
+  # Expand the photos
+  unnest(observation_photos, names_sep = ".") |>
+  # Update url and create the export filename
+  mutate(
+    clean_url = str_replace(observation_photos.photo.url, "square", "small"),
+    img_name = paste0(
+      str_to_upper(substr(species_label, 1, 1)),
+      "_obs",
+      id,
+      "_img",
+      observation_photos.id,
+      "_",
+      observation_photos.position,
+      ".jpg"
+    ),
+    save_dir = paste0(save_dir, "/", img_name)
+  ) |>
+  # Only keep relevant columns
+  select(
+    id,
+    species_label,
+    clean_url,
+    img_name,
+    save_dir,
+    contains("observation_photos")
+  )
+```
+
+```{r}
+#| label: explore-data
+# -- Check out one ID - see multiple rows of images per observation ID :)
+processed_data |>
+  filter(id == 324828906) |>
+  glimpse()
+
+# --- Check license_codes for individual images to ensure they haven't been
+# changed from the observation license "observation_photos.photo.license_code" check
+# - table Numbers will be different due to more rows of images in processed_data
+clean_EUSA_EPT |> select(license_code) |> table()
+processed_data |> select(observation_photos.photo.license_code) |> table()
+# - check for license codes that we DONT want
+processed_data |>
+  filter(
+    !observation_photos.photo.license_code %in% c("cc-by", "cc-by-nc", "cc0")
+  )
+
+# --- Check for flagged images "observation_photos.photo.flags"
+processed_data |> filter(length(observation_photos.photo.flags) == 0)
+
+# -- Check for urls not in the AWS open dataset
+processed_data |> filter(!str_detect(clean_url, "inaturalist-open-data"))
+
+# --- Check for "all rights reserved"
+# Observations with photo NA license codes get assigned "all rights reserved"
+# despite the observation license_code field being assigned cc-by, cc-by-nc, or cc0
+processed_data |>
+  filter(str_detect(
+    observation_photos.photo.attribution,
+    "all rights reserved"
+  ))
+processed_data |> filter(is.na(observation_photos.photo.license_code))
+look <- clean_EUSA_EPT |> filter(id == "325739000")
+
+# Clean up data
+final_data <- processed_data |>
+  filter(
+    observation_photos.photo.license_code %in% c("cc-by", "cc-by-nc", "cc0")
+  ) |>
+  filter(str_detect(clean_url, "inaturalist-open-data")) |>
+  filter(
+    !str_detect(observation_photos.photo.attribution, "all rights reserved")
+  ) |>
+  select(-contains("observation_photos"))
+
+rm(processed_data, clean_EUSA_EPT, look)
+gc()
+```
+
+```{r}
+#| label: save-data
+# Save the final dataset
+write_csv(final_data, here(L2_data_dir, "202b_images_metadata_EUSA_EPT.csv"))
+```
+
+
+```{r}
+#| label: download-data
+# Create log file
+log_file <- here(
+  L2_data_dir,
+  "202c_EUSA_EPT_images",
+  "download_log.txt"
+)
+if (!file.exists(log_file)) {
+  file.create(log_file)
+}
+
+## iteratte over columns to download photos
+final_data |>
+  pwalk(function(clean_url, save_dir, id, ...) {
+    # Skip if image already downloaded
+    if (file.exists(save_dir)) {
+      write(
+        paste0(Sys.time(), " | SKIP | ", id),
+        file = log_file,
+        append = TRUE
+      )
+      return(NULL)
+    }
+
+    # Try downloading image
+    tryCatch(
+      {
+        download.file(
+          url = clean_url,
+          destfile = save_dir,
+          mode = "wb",
+          quiet = TRUE
+        )
+        # write to log
+        write(
+          paste0(Sys.time(), " | SUCCESS | ", id),
+          file = log_file,
+          append = TRUE
+        )
+        Sys.sleep(0.1) # tiny sleep
+      },
+      error = function(e) {
+        # Log the error with a timestamp
+        write(
+          paste0(Sys.time(), " | FAIL | ", id, " | ", clean_url),
+          file = log_file,
+          append = TRUE
+        )
+      }
+    )
+  })
+```
+
+# download skipped files
+
+
+```{r}
+#| label: read-log
+# I have two logs files with different names, so this reads in all/any log files
+
+files <- dir(here(L2_data_dir, "202c_EUSA_EPT_images"))
+
+# Read in any log files
+all_logs <- tibble(file_path = files) |>
+  filter(str_detect(file_path, "download_log.*\\.txt")) |>
+  mutate(log_name = fs::path_file(file_path)) |>
+  mutate(
+    data = map(
+      file_path,
+      ~ {
+        # Read as raw lines
+        tibble(
+          raw_text = read_lines(here(
+            L2_data_dir,
+            "202c_EUSA_EPT_images",
+            .x
+          ))
+        ) |>
+          separate_wider_delim(
+            cols = raw_text,
+            delim = "|",
+            names = c("timestamp", "status", "id", "other"),
+            too_few = "align_start",
+            too_many = "merge"
+          ) |>
+          mutate(across(everything(), trimws))
+      }
+    )
+  ) |>
+  select(log_name, data) |>
+  unnest(cols = c(data))
+
+
+# See success vs failure counts
+all_logs |> group_by(log_name) |> count(status)
+
+# 37 observations failed to download
+
+failed <- all_logs |>
+  filter(
+    status == "FAIL" & log_name == "download_log_05_25_2026_rerun_skips.txt"
+  ) |>
+  distinct()
+
+# Upon examining a small sample of these observations,
+# they are not downloading because the licensing to the observation
+# has changed since the observation metadata was pulled from the
+# iNat API in early 2026.
+# For example, observation ID #165636469 has a cc-by-nc license
+clean_EUSA_EPT |> filter(id == 165636469) |> select(license_code)
+# However, when examinign this observation on iNaturalist,
+# the observation is covered by the user with "all rights reserved":
+# https://www.inaturalist.org/observations/165636469
+```
+
+
+
+
+
+# Download single image
+```{r}
+#| label: dwnld-image
+#### Try downloading one image - works!
+
+obs_data <- clean_EUSA_EPT[1, ]
+
+rm(all_spp_ids)
+# 4. Extract the URL and Observation ID
+target_url <- obs_data |>
+  select(observation_photos) |>
+  unnest(observation_photos)
+target_url <- target_url$photo.url[1]
+obs_id <- obs_data$id[1]
+
+# 5. Clean the URL
+# Standard sizes: small, medium, large, original
+clean_url <- gsub("square", "small", target_url)
+
+# 6. Download the image
+dest_file <- paste0("observation_", obs_id, ".jpg")
+
+tryCatch(
+  {
+    download.file(clean_url, destfile = dest_file, mode = "wb")
+    message("Successfully downloaded observation ", obs_id, " to ", dest_file)
+  },
+  error = function(e) {
+    message(
+      "Failed to download."
+    )
+  }
+)
+```
+
+
+```{r}
+final_data |>
+  filter(id == 49285280) |>
+  print(width = 500)
+
+hmm <- clean_EUSA_EPT |>
+  filter(id == 49285280)
+```
+
+# old code approach
+
+```{r}
+#| label: old-code
+#Download_Images(clean_EUSA_EPT[1:5, ])
+
+# old manual function
+# Download_Images <- function(EPT_data) {
+#   id_list <- EPT_data |> pull(id)
+
+#   for (current_id in seq_along(id_list)) {
+#     # Get observation data for current obs ID
+#     obs_data <- EPT_data |>
+#       filter(id == current_id)
+
+#     # Get image data/metadata for current obs ID
+#     img_data <- obs_data |>
+#       select(observation_photos) |>
+#       unnest(observation_photos)
+
+#     # Specific image data
+#     obs_id <- obs_data |> pull(id)
+
+#     # Get the name of the species
+#     obs_spp <- obs_data |>  mutate(case_when(species = "Trichoptera",
+#       grepl(paste0("(^|,|/)", tric, "(,|/|$)"), taxon.ancestry) |
+#       taxon.name == "Trichoptera",
+#     species= "Plecoptera", grepl(paste0("(^|,|/)", plec, "(,|/|$)"), taxon.ancestry) |
+#       taxon.name == "Plecoptera",
+#     .default = NA))
+
+#     img_id <- img_data |> pull(id) # may be 1 ID or list if multiple images per obs
+#     img_pos <- img_data |> pull(position)
+#     img_url <- img_data |> pull(photo_url)
+#     img_license <- img_data |> pull(photo.license_code)
+
+#     # Process each image associated with an obs
+#     for (img in seq_along(img_id)) {
+#       # Change to download "small" photos (max 240px in either dimension)
+#       clean_url <- gsub("square", "small", img_url[img])
+#       # Create image name for export
+#       img_name <- paste0(obs_spp, "obs_", img_id[img], "_img_", img_id[img], "_", img_pos[img], ".jpg")
+#     }
+```

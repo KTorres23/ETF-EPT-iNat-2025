@@ -1,0 +1,381 @@
+---
+title: 201_clean_raw_EPT.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script cleans up the raw observations of 3 aquatic insect taxon pulled from the iNaturalist API, including the orders Ephemeroptera, Plecoptera, and Trichoptera. The observation data is filtered to observations within the study extent and that meet certain requirements. The data is saved as a CSV and RDS.
+date: 2026-09-12 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+# Set up environment
+
+```{r}
+#| label: debug-dependencies
+#| include: false
+# If facing issues with flextable::autofit(), run this block to fix
+# dependencies with installation of the flextable and systemfonts packages
+
+remove.packages("flextable")
+remove.packages("systemfonts")
+
+install.packages("flextable", dependencies = T)
+install.packages("systemfonts")
+
+library(flextable)
+library(systemfonts)
+```
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here, officer, flextable, sf)
+
+# Set working directory
+here::i_am("scripts/L2/201_clean_raw_EPT.qmd")
+
+# Point to directories
+L0_data_dir <- here("data", "L0") # L0 data
+L1_data_dir <- here("data", "L1") # L1 data
+L2_data_dir <- here("data", "L2") # L2 data
+```
+
+# Read data
+
+## Shapefile data
+```{r}
+#| label: read-raw-sf-data
+# Read Eastern USA L1 ecoregion shapefile
+EUSA_sf <- read_sf(here(
+  L0_data_dir,
+  "000a_na_cec_eco_l1",
+  "NA_CEC_Eco_Level1.shp"
+)) |>
+  filter(NA_L1NAME == "EASTERN TEMPERATE FORESTS") |>
+  st_transform(crs = 4326) |> # Ensures WGS84
+  st_make_valid()
+
+# Read raw EPT in EUSA shapefile
+raw_EUSA_EPT_sf <- read_sf(here(
+  L1_data_dir,
+  "102_raw_EUSA_EPT_obs_shp",
+  "102_raw_EUSA_EPT_obs.shp"
+))
+raw_EUSA_EPT_df <- as.data.frame(raw_EUSA_EPT_sf)
+```
+
+**Visualize data**
+
+```{r}
+#| label: viz-eusa-ept-data
+# Visualize EPT points in the EUSA
+plot(
+  st_geometry(EUSA_sf),
+  main = "Eastern USA L1 Ecoregion (US EPA) and iNaturalist EPT observations"
+)
+plot(
+  st_geometry(raw_EUSA_EPT_sf),
+  col = "blue",
+  add = TRUE,
+  pch = 16,
+  cex = 1
+)
+
+rm(raw_EUSA_EPT_sf, EUSA_sf)
+```
+
+## Observation data
+
+```{r}
+#| label: read-raw-obs-data
+# Read raw observation data
+raw_EUSA_EPT <- read_csv(here(L1_data_dir, "101a_raw_EPT_obs.csv")) |>
+  semi_join(raw_EUSA_EPT_df, by = "id") |> # Only keep EPT obs in the EUSA
+  distinct(id, .keep_all = TRUE) # Remove dupes
+
+rm(raw_EUSA_EPT_df)
+```
+
+# Data exploration
+
+Explore filters
+
+* observation status
+* dates
+* licenses
+* geolocation accuracy
+
+
+**examine observation status**
+
+Run the [debug-dependencies](#debug-dependencies) block if an error is thrown when executing the commented-out code.
+
+* 1,755 casual observations
+* 180,347 needs_id 
+* 16,313 research-grade
+
+```{r}
+#| label: examine-obs-status
+raw_EUSA_EPT |>
+  select(quality_grade) |>
+  table()
+
+# # Optional table to export
+# raw_EUSA_EPT |>
+#   select(id, quality_grade) |>
+#   group_by(quality_grade) |>
+#   tally(sort = TRUE) |>
+#   flextable() |>
+#   autofit()
+```
+
+**examine dates**
+
+Use `observed_on` rather than `created_at` for date filtering because `created_at` is when the obs was uploaded, not when it was observed. Note iNat start date is 2008.
+
+* 365 obs without a date
+* 467 obs outside of 2000 to 2025
+
+```{r}
+#| label: examine-dates
+dates <- raw_EUSA_EPT |>
+  select(
+    id,
+    observed_on,
+    created_at,
+    created_at_details.date,
+    observed_on_details.date,
+    observed_on_details.day,
+    observed_on_details.month,
+    observed_on_details.hour,
+    observed_on_details.year,
+    observed_on_details.week,
+    created_at_details.day,
+    created_at_details.month,
+    created_at_details.hour,
+    created_at_details.year,
+    created_at_details.week
+  )
+
+
+# 365 obs without a date
+dates |> filter(is.na(observed_on)) |> count()
+
+# 467 obs outside of 2000-2025
+dates |> filter(!between(observed_on_details.year, 2000, 2025)) |> count()
+
+
+# Look at differences when observations were uploaded to iNat vs. when they were actually observed in the wild
+dates <- dates |>
+  mutate(date_diff = as.numeric(as.Date(created_at) - as.Date(observed_on))) |>
+  relocate(date_diff, .after = id)
+
+plot(dates$created_at_details.date, dates$date_diff)
+plot(dates$observed_on_details.date, dates$date_diff)
+plot(dates$observed_on_details.date, dates$created_at_details.date)
+
+rm(dates)
+```
+
+**examine licenses**
+
+* cc-by = 19290
+* cc-by-nc = 123540
+* cc-by-nc-nd = 2549
+* cc-by-nc-sa = 1560
+* cc-by-nd = 245
+* cc-by-sa = 880
+* cc0 = 8228
+* NA = 42123
+
+```{r}
+#| label: examine-licenses
+# count license codes
+raw_EUSA_EPT |>
+  select(license_code) |>
+  table(useNA = "ifany")
+
+# # Optional table to export
+# raw_EUSA_EPT |>
+#   group_by(license_code) |>
+#   tally(sort = TRUE) |>
+#   flextable() |>
+#   autofit()
+```
+
+**examine geolocation accuracy**
+
+```{r}
+#| label: examine-geo-acc
+geo <- raw_EUSA_EPT |>
+  select(
+    id,
+    taxon.conservation_status.geoprivacy, # can be overrided by taxon_geoprivacy or geoprivacy
+    taxon_geoprivacy,
+    geoprivacy,
+    out_of_range,
+    location,
+    obscured,
+    public_positional_accuracy,
+    positional_accuracy,
+    context_user_geoprivacy,
+    preferences.auto_obscuration, # related to user preferences, not obs
+    place_guess,
+    map_scale,
+    mappable
+  )
+
+# No missing coordinates; observations with missing locations were already
+# removed in the `101_combine_raw_EPT.qmd` script
+geo |> filter(is.na(location)) |> count()
+
+
+# --- Look at geoprivacy ---
+
+# 110 obs with taxon-related geoprivacy
+geo |> filter(taxon.conservation_status.geoprivacy == "obscured") |> count()
+geo |> filter(taxon_geoprivacy == "obscured") |> count()
+
+# 16,720 obs with obscured coordinates, creating coordinates with a positional
+# accuracy greater than ~26k meters
+geo |> filter(geoprivacy == "obscured") |> count()
+geo |> filter(geoprivacy == "private") |> count()
+
+# Geoprivacy columns are either obscured, private, open, or NA.
+# "Obscured" points are a random point within a 0.2*0.2 degree cell of the
+# original observation point. NA usually indicates that the observation
+# geoprivacy is open, or that another geoprivacy column needs to be referenced
+# for the correct geoprivacy.
+# Filters out 16,781 obs relating to geoprivacy
+filtered_geo <- geo |>
+  filter(geoprivacy != "obscured" | is.na(geoprivacy) | geoprivacy == "open") |>
+  filter(
+    taxon_geoprivacy != "obscured" |
+      is.na(taxon_geoprivacy) |
+      taxon_geoprivacy == "open"
+  ) |>
+  filter(
+    (taxon.conservation_status.geoprivacy == "obscured" &
+      taxon_geoprivacy == "open") |
+      is.na(taxon.conservation_status.geoprivacy) |
+      taxon.conservation_status.geoprivacy == "open"
+  ) |>
+  filter(obscured == F)
+
+
+# taxon geoprivacy
+# notice 77 obs are obscured, due to recognized conservation status
+# notice 3,294 are open and 195,044 are NA due to unknown conservation status
+#https://help.inaturalist.org/en/support/solutions/articles/151000169938-what-is-geoprivacy-what-does-it-mean-for-an-observation-to-be-obscured-
+geo |>
+  group_by(taxon_geoprivacy) |>
+  tally(sort = TRUE) |>
+  flextable() |>
+  autofit()
+
+
+# --- Look at positional accuracy ---
+
+# Only 1 obs with differences in positional accuracy and public_positional_accuracy
+# Note sure why the difference exists, but will remove this obs to avoid issues
+filtered_geo |>
+  filter(public_positional_accuracy != positional_accuracy) |>
+  count()
+
+# 36,459 obs missing accuracy
+# While NA accuracies can be due to devices not sharing location data with
+# iNaturalist (e.g., some cameras or Android devices don't geotag images or
+# location sharing permissions must be explicitly set up), I removed them to
+# avoid spatial imprecision.
+filtered_geo |> filter(is.na(positional_accuracy)) |> count()
+
+# Remove bad accuracies
+filtered_geo_upd1 <- filtered_geo |>
+  filter(public_positional_accuracy == positional_accuracy) |>
+  filter(!is.na(positional_accuracy))
+
+# - Determine positional accuracy filter
+
+# First look at accuracy; 145,174 obs
+filtered_geo_upd1 |> ggplot(aes(x = positional_accuracy)) + geom_boxplot()
+count(filtered_geo_upd1) # all accuracy
+
+# 500m accuracy or less; 129,489 obs
+filtered_geo_upd2 <- filtered_geo_upd1 |>
+  filter(positional_accuracy < 500)
+filtered_geo_upd2 |> ggplot(aes(x = positional_accuracy)) + geom_boxplot()
+count(filtered_geo_upd2) # < 500m accuracy
+
+# 100m accuracy or less; ; 108,180 obs
+filtered_geo_upd3 <- filtered_geo_upd1 |>
+  filter(positional_accuracy < 100) # Only keep accuracy of 100m
+filtered_geo_upd3 |> ggplot(aes(x = positional_accuracy)) + geom_boxplot()
+count(filtered_geo_upd3) # < 100m accuracy
+
+
+rm(geo, filtered_geo, filtered_geo_upd1, filtered_geo_upd2, filtered_geo_upd3)
+```
+
+
+
+# Clean data
+
+```{r}
+#| label: clean-data
+clean_EUSA_EPT <- raw_EUSA_EPT |>
+  # Already filtered to include only EUSA obs
+  filter(quality_grade != "casual") |> # Remove casual obs
+  filter(!is.na(observed_on)) |> # Remove missing dates
+  filter(between(observed_on_details.year, 2000, 2025)) |> # Dates 2000-2025
+  filter(license_code %in% c("cc-by", "cc-by-nc", "cc0")) |> # CC Licenses
+  # --Only keep observations with unobscured geoprivacy
+  filter(geoprivacy != "obscured" | is.na(geoprivacy) | geoprivacy == "open") |>
+  filter(
+    taxon_geoprivacy != "obscured" |
+      is.na(taxon_geoprivacy) |
+      taxon_geoprivacy == "open"
+  ) |>
+  filter(
+    (taxon.conservation_status.geoprivacy == "obscured" &
+      taxon_geoprivacy == "open") |
+      is.na(taxon.conservation_status.geoprivacy) |
+      taxon.conservation_status.geoprivacy == "open"
+  ) |>
+  filter(obscured == F) |>
+  filter(positional_accuracy < 100) # Only keep accuracy of <100m
+```
+
+
+# Summarize clean data
+
+```{r}
+#| label: summarize-clean-data
+# All EPT obs
+clean_EPT_export <- clean_EUSA_EPT |>
+  select(id, location, taxon.ancestry, taxon.name) |>
+  mutate(
+    lat = as.numeric(str_extract(location, "^[^,]+")),
+    long = as.numeric(str_extract(location, "[^,]+$")),
+  ) |>
+  select(-location)
+```
+
+
+# Export data
+
+```{r}
+#| label: export-data
+# Save all occurrence data
+clean_EPT_export |>
+  select(id, lat, long, taxon.name) |>
+  write_csv(here(L2_data_dir, "201a_clean_EUSA_EPT_obs.csv"))
+```

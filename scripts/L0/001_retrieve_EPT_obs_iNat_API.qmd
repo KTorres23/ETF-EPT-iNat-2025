@@ -1,0 +1,255 @@
+---
+title: 001_retrieve_EPT_obs_iNat_API.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script retrieves observation information for 3 aquatic insect taxon from the iNaturalist API, including the orders Ephemeroptera, Plecoptera, and Trichoptera, and saves the data into an RDS and CSV file
+date: 2026-09-12 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+Last data pull initated on 2/10/2026 at 1:47pm
+
+# Set up environment
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(httr, jsonlite, tidyverse, here)
+
+# Clear envionrment
+rm(list = ls())
+
+# Set working directory
+here::i_am("scripts/L0/001_retrieve_EPT_obs_iNat_API.qmd")
+```
+
+# Establish API parameters
+
+```{r}
+#| label: est-api-param
+# base API url
+API_URL <- "https://api.inaturalist.org/v1/observations"
+PER_PAGE <- 200 # Max records per request (API maximum)
+USER_NAME <- "iNat user: kmtorres" # allows iNat to reach out about API traffic concerns
+
+# Variables for pagination
+last_obs_id <- 0
+total_downloaded <- 0
+page_num <- 1
+
+# Taxon variables
+taxon_id_list <- c(48011, 47504, 62164)
+taxon_name_list <- c("Ephemeroptera", "Plecoptera", "Trichoptera")
+taxon_was_updated <- c(FALSE, FALSE, FALSE)
+taxon_last_id_list <- list()
+taxon_datasets <- list()
+
+# iNat Taxon ID
+#ephe <- 48011
+#plec <- 47504
+#tric <- 62164
+```
+
+# Retrieve data from API
+
+## Check existing data
+
+Observation data was pulled between November 3rd and 4th 2025 for EPT taxa.
+However, the study period is from 2000-2025, so additional data needs to be
+pulled to complete the period.
+
+If starting from scratch, skip this cell and change `last_obs_id` to 0 for the [API call parameters](#retrieve-api-data)
+
+```{r}
+#| label: check-exist-data
+#| message: false
+get_id <- function(x) {
+  csv_file <- here(
+    "data",
+    "L0",
+    sprintf(
+      "001%s_obs_%s.csv",
+      letters[x],
+      str_to_lower(taxon_name_list[x])
+    )
+  )
+
+  if (file.exists(csv_file)) {
+    cat(sprintf(
+      "\nExisting observations file found for: %s\n",
+      taxon_name_list[x]
+    ))
+
+    id_num <- read_csv(csv_file) |>
+      pull(id) |>
+      max()
+    return(id_num)
+  } else {
+    cat(sprintf(
+      "\nNo existing observations file found for: %s\n",
+      taxon_name_list[x]
+    ))
+  }
+}
+
+# Get max observation id, if existing observation data exists
+for (x in seq_along(taxon_id_list)) {
+  taxon_last_id_list <- append(taxon_last_id_list, get_id(x))
+}
+```
+
+## Retrieve new data
+
+```{r}
+#| label: retrieve-api-data
+# Loop through taxa
+for (x in seq_along(taxon_id_list)) {
+  id <- taxon_id_list[x]
+  name <- taxon_name_list[x]
+  cat(sprintf(
+    "Starting download for observations of %s (ID=%d): ...\n",
+    name,
+    id
+  ))
+
+  current_taxon_page <- list()
+  total_downloaded <- 0
+  page_num <- 1
+
+  # Sets last observation id to 0 if no existing data is available
+  if (length(taxon_last_id_list) > 1) {
+    last_obs_id <- taxon_last_id_list[x]
+    taxon_was_updated[x] <- TRUE
+  } else {
+    last_obs_id <- 0
+    taxon_was_updated[x] <- FALSE
+  }
+
+  # Loop through API pages
+  while (TRUE) {
+    # Query parameters
+    params <- list(
+      taxon_id = id,
+      per_page = PER_PAGE,
+      order_by = 'id', # required to use id_above
+      order = 'asc', # required to use id_above
+      id_above = last_obs_id
+    )
+
+    # Make API request
+    response <- GET(API_URL, query = params, user_agent(USER_NAME)) # specify for iNat
+
+    # Check for HTTP errors
+    if (http_error(response)) {
+      cat(sprintf(
+        "\n!!! HTTP Error on page %d: %s !!!\n",
+        page_num,
+        http_status(response)$message
+      ))
+      break
+    }
+
+    # Parse JSON response
+    content <- content(response, "text", encoding = "UTF-8")
+    data <- fromJSON(content, flatten = TRUE)
+
+    results <- data$results
+
+    if (length(results) == 0) {
+      cat("\n*** Reached the end of the results. ***\n")
+      break # Exit loop if no results
+    }
+
+    # Extract data and update variables
+    # 'results' is a data frame when fromJSON is used
+    current_taxon_page[[page_num]] <- results
+
+    total_downloaded <- total_downloaded + nrow(results)
+
+    # Update the last_obs_id for the next request
+    # The last observation's ID is the largest on this page
+    last_obs_id <- max(results$id)
+
+    cat(sprintf(
+      "Page %d: Downloaded %d observations. %d saved, %d remaining. Next ID_Above: %d\n",
+      page_num,
+      nrow(results),
+      total_downloaded,
+      data$total_results,
+      last_obs_id
+    ))
+
+    page_num <- page_num + 1
+
+    # Respect the API rate limit
+    Sys.sleep(5)
+  }
+
+  # Save a serpate dataframe for each taxon
+  if (length(current_taxon_page) > 0) {
+    single_taxon_df <- bind_rows(current_taxon_page)
+
+    # Use the taxon name as the key for the taxon df
+    taxon_datasets[[name]] <- single_taxon_df
+
+    cat(sprintf(
+      "\n>> Finished %s. Saved %d rows to taxon_datasets[['%s']]\n",
+      name,
+      nrow(single_taxon_df),
+      name
+    ))
+  } else {
+    cat("\nNo observations found.\n")
+  }
+}
+```
+
+# Save data and file
+
+> [!IMPORTANT]
+> This will write over the existing files by joining the existing data with new data if the API found new observation records
+
+```{r}
+#| label: export-data
+for (x in seq_along(taxon_id_list)) {
+  name <- taxon_name_list[x]
+  file_prefix <- sprintf("001%s_obs_%s", letters[x], name)
+
+  cat(sprintf(
+    "\nChecking if files already exist for %s and if a CSV and RDS exist under the file name: %s",
+    name,
+    file_prefix
+  ))
+
+  # create file paths
+  rds_file <- here("data", "L0", paste0(file_prefix, ".rds"))
+  csv_file <- here("data", "L0", paste0(file_prefix, ".csv"))
+
+  # Add existing data to new data, if it exists
+  if (file.exists(csv_file) && file.exists(rds_file) && taxon_was_updated[x]) {
+    cat(sprintf("\nJoining existing data and new data for %s\n", name))
+
+    # Bind with RDS file because lists within the object are lost in CSV
+    existing_rds <- readRDS(rds_file)
+    taxon_datasets[[name]] <- bind_rows(taxon_datasets[[name]], existing_rds)
+  } else {
+    cat(sprintf(
+      "\nNo occurrence data already exists. Creating new files for %s\n",
+      name
+    ))
+  }
+  # Save rds and csv files for each taxon; (rewrites existing files)
+  saveRDS(taxon_datasets[[name]], file = rds_file)
+  write_csv(taxon_datasets[[name]], file = csv_file)
+}
+```

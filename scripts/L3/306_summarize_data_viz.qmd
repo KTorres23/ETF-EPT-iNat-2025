@@ -1,0 +1,1688 @@
+---
+title: 306_summarize_data_viz.md
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script creates visualizations of my final data used for modelling and analyses.
+date: 2026-09-12 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+
+# Results to write
+
+`{XTABLE}` - table of # of obs per taxa (EPT, IPP), per dataset (GBIF/iNat), per life stage (A/J) & combined
+
+**raw inat data pull**
+
+From the iNaturalist API, I pulled `{1XXX}` unique observations of Ephemeroptera, Plecoptera, and Trichoptera taken from Jan 2000 to Dec 2025, retaining only `{2XXX}` within the North America L1 ecoregion of the Eastern Temperate Forest. Because most of the covariate data is for the United States, I restricted the study extent to only the United States portion of the Eastern Temperate Forests in later filters. After adding quality control filters (e.g., positional accuracy, public licensing, temporal data) and during the image annotation process where I investigated further quality checks (e.g., duplicate images, observations unidentifiable to the order level), I retained a total of `{3XXX}` observations for all subsequent analyses (`{XTABLE}`). 
+
+*use sankey diagram??*
+1. pull taxon IDs from `raw_EPT`, get # of obs per taxa
+2. pull taxon IDs from `raw_EUSA_EPT`, get # of obs per taxa
+3. from `final_EUSA_EPT`, grab # of obs per taxa, per life stage
+
+**clean inat data summary - order-level for SO1/2**
+
+Of the iNaturalist observations included in the analyses, I found `{%%%%}` observations were not research grade, `{%%%}` had no annotations, and `{%%%}` only had one identification. There were `{XXX}` observers and `{XXX}` identifiers (supplementary methods acknowledging their contributions). The data in our EUSA study extent represents `{%%%}` of all global EPT observations. From my annotations, I found `{%%%}` immature and `{%%%}` adult observations
+
+*from `final_EUSA_EPT`*
+* SUNBURST CHART: get # of obs Research grade vs Needs ID ( by taxa! - make table of all #s and %s- combined & by taxa/life stage)
+* add to sunburst chart? get # of obs w/& w/o annotations  (by taxa! make table combined)
+* BAR: get # of IDs per observation (by taxa! make table combined)
+* BAR: get # of identifiers & observers (by taxa! make table combined)
+* MAP: show distrib. data across EUSA (by taxa)
+
+**inat/gbif data summary - family-level for SO3**
+
+*NEED TO DESCRIBE METHODS FOR THIS SELECTION - basically I grabbed the families & species with lowest amounts of data on iNat, then grabbed the corresponding families/spp data w/life stage metadata from the INHS dataset on GBIF, and selected the taxa with adequate data for modelling in both datasets (Isonychiidae, Ptero, Philo). iNat obs were considered "validated" at family level if they included at least 2 identifications* *i didnt filter dates for GBIF data...*
+
+As part of SO3, I selected three aquatic insect families from each order (of EPT) with high data deficiency on both iNaturalist and GBIF. The three taxa were the families of Isonychiidae, Pteronarcyidae , Philopotamidae. These families do not necessarily represnt threatened taxa, but rather data deficient taxa - attributable to low sampling rather than taxa rarity. Isonychiidae has 17 spp in its family, Pteronarcyidae has 10 species, and  Philopotamidae has 42 species across North America (book). We did not validate our iNaturalist data to species-level, but when examining the GBIF data, we can see `X, Y, Z` species represented in the I, P, & P families, respectively.
+
+To train models in SO3, I worked with the three family-level taxa selected above. `{XXX}` family had the most iNaturalist observations and GBIF records, whereas `{XXX}` had the lowest (FIG). Observations on iNaturalist were dominated by adult life stages `{%%% +- SD}`, while GBIF was/was not at `{%%% +- SD}`. The occurrences of each taxa were relatively well-distributed across the study extent for both species. 
+
+*using `EUSA_EPT_gbif_df`*
+* [text] get num. spp represnted in each taxa
+* sunburst chart: iNat order-level lifestage/taxon distribution
+* sunburst chart: iNat family-level lifestage/taxon distribution
+* sunburst chart: GBIF family-level lifestage/taxon distribution
+* map: iNat family-level lifestage/taxon distribution
+* map: GBIF family-level lifestage/taxon distribution
+
+* Research grade vs Needs ID
+* w/& w/o annotations
+* IDs
+* Identifiers vs observers
+* state/spatiall distribution across EUSA (compare to # globally)
+
+# Set up environment
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here, sf, fs, officer, flextable, scales)
+
+# Set working directory
+here::i_am("scripts/L3/306_summarize_data_viz.qmd")
+
+# Point to directories
+L0_data_dir <- here("data", "L0") # L0 data
+L1_data_dir <- here("data", "L1") # L1 data
+L2_data_dir <- here("data", "L2") # L2 data
+L3_data_dir <- here("data", "L3") # L3 data
+L306_figs_dir <- here(L3_data_dir, "306_data_summary_figures")
+fs::dir_create(L306_figs_dir)
+```
+
+
+```{r}
+#| label: taxon-labels
+# iNat Taxon ID
+EPT_id <- c("48011", "47504", "62164")
+EPT <- c("ephemeroptera", "plecoptera", "trichoptera")
+
+
+family_inat_dict <- c(
+  "Isonychiidae" = "48007", # Ephemeroptera
+  "Pteronarcyidae" = "47503", # Plecoptera
+  "Philopotamidae" = "154581" # Trichoptera
+)
+
+family_gbif_list <- c(
+  "Isonychiidae", # Ephemeroptera
+  "Pteronarcyidae", # Plecoptera
+  "Philopotamidae" # Trichoptera
+)
+```
+
+
+```{r}
+#| label: colors
+# Custom color palette (sunburst chart)
+custom_colors <- c(
+  # Inner Ring Base Colors (Orders)
+  "Ephemeroptera" = "#1F77B4", # Deep Blue
+  "Plecoptera" = "#2CA02C", # Deep Green
+  "Trichoptera" = "#FF7F0E", # Deep Orange
+
+  # Outer Ring Shades: Ephemeroptera (Blues)
+  "Ephemeroptera - Adult" = "#6BAED6", # Lighter Blue
+  "Ephemeroptera - Immature" = "#9ECAE1", # Pale Blue
+  "Ephemeroptera - Eggs" = "#C6DBEF", # Softest Blue
+
+  # Outer Ring Shades: Plecoptera (Greens)
+  "Plecoptera - Adult" = "#74C476", # Lighter Green
+  "Plecoptera - Immature" = "#A1D99B", # Pale Green
+  "Plecoptera - Eggs" = "#C7E9C0", # Softest Green
+
+  # Outer Ring Shades: Trichoptera (Oranges)
+  "Trichoptera - Adult" = "#FDAE6B", # Lighter Orange
+  "Trichoptera - Immature" = "#FDD0A2", # Pale Orange
+  "Trichoptera - Eggs" = "#FEE6CE", # Softest Orange
+
+  # --- Quality Grade
+  # --- Ring 3: Quality Grade (Outer Ring)
+  # Ephemeroptera
+  "Ephemeroptera - Adult - RG" = "#6BAED6", # Matches Adult Blue
+  "Ephemeroptera - Adult - Needs ID" = "#D9D9D9", # Lighter Gray
+  "Ephemeroptera - Immature - RG" = "#9ECAE1", # Matches Immature Blue
+  "Ephemeroptera - Immature - Needs ID" = "#EBEBEB", # Softest Light Gray
+
+  # Plecoptera
+  "Plecoptera - Adult - RG" = "#74C476", # Matches Adult Green
+  "Plecoptera - Adult - Needs ID" = "#D9D9D9", # Lighter Gray
+  "Plecoptera - Immature - RG" = "#A1D99B", # Matches Immature Green
+  "Plecoptera - Immature - Needs ID" = "#EBEBEB", # Softest Light Gray
+
+  # Trichoptera
+  "Trichoptera - Adult - RG" = "#FDAE6B", # Matches Adult Orange
+  "Trichoptera - Adult - Needs ID" = "#D9D9D9", # Lighter Gray
+  "Trichoptera - Immature - RG" = "#FDBB84", # Matches Immature Orange
+  "Trichoptera - Immature - Needs ID" = "#EBEBEB" # Softest Light Gray
+)
+```
+
+# iNat Order-level Data Summary
+
+```{r}
+#| label: read-inat-data
+# ---- Raw iNat API data (script L101)
+raw_EPT <- read_csv(here(L1_data_dir, "101a_raw_EPT_obs.csv")) |>
+  distinct(id, .keep_all = TRUE)
+
+# --- Read raw observation data - Filtered to North America L1 ecoregion Estern Temperature Forests (script L202)
+# raw EPT in EUSA shapefile
+raw_EUSA_EPT_sf <- read_sf(here(
+  L1_data_dir,
+  "102_raw_EUSA_EPT_obs_shp",
+  "102_raw_EUSA_EPT_obs.shp"
+))
+raw_EUSA_EPT_df <- as.data.frame(raw_EUSA_EPT_sf)
+raw_EUSA_EPT <- read_csv(here(L1_data_dir, "101a_raw_EPT_obs.csv")) |>
+  semi_join(raw_EUSA_EPT_df, by = "id") |> # Only keep EPT obs in the EUSA
+  distinct(id, .keep_all = TRUE) # Remove dupes
+
+# --- Cleaned observation data (script L202)
+# clean_EUSA_EPT <- read_csv(here(L2_data_dir, "201a_clean_EUSA_EPT_obs.rds"))
+
+# --- Final observation data excluding Canada observation
+# Final observation data after removing image dupes, missing pics, cant ID observations, etc.
+# from my annotation process (script L207)
+final_EUSA_EPT <- readRDS(here(
+  L2_data_dir,
+  "209_occurrence_datasets",
+  "209a_EUSA_EPT_inat.rds"
+))
+
+rm(raw_EUSA_EPT_sf, raw_EUSA_EPT_df)
+```
+
+## species totals
+
+```{r}
+#| label: get-num-spp-raw
+MakePattern <- function(data) {
+  string <- paste0("(^|,|/)", data, "(,|/|$)")
+}
+
+raw_EPT_totals <- raw_EPT |>
+  # Dates 2000-2025
+  filter(between(observed_on_details.year, 2000, 2025)) |>
+  # Grab species label
+  mutate(
+    species = case_when(
+      str_to_lower(taxon.name) == EPT[1] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[1])) ~ EPT[1],
+      str_to_lower(taxon.name) == EPT[2] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[2])) ~ EPT[2],
+      str_to_lower(taxon.name) == EPT[3] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[3])) ~ EPT[3],
+      .default = NA_character_
+    )
+  ) |>
+  group_by(species) |>
+  # Summarize # obs, plec, tric
+  summarize(num_obs_spp = n()) |>
+  ungroup() |>
+  mutate(total_obs = sum(num_obs_spp), dataset = "Raw Global EPT")
+```
+
+
+```{r}
+#| label: get-num-spp-raw-eusa
+raw_EUSA_EPT_totals <- raw_EUSA_EPT |>
+  # Dates 2000-2025
+  filter(between(observed_on_details.year, 2000, 2025)) |>
+  # Grab species label
+  mutate(
+    species = case_when(
+      str_to_lower(taxon.name) == EPT[1] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[1])) ~ EPT[1],
+      str_to_lower(taxon.name) == EPT[2] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[2])) ~ EPT[2],
+      str_to_lower(taxon.name) == EPT[3] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[3])) ~ EPT[3],
+      .default = NA_character_
+    )
+  ) |>
+  group_by(species) |>
+  # Summarize # obs, plec, tric
+  summarize(num_obs_spp = n()) |>
+  ungroup() |>
+  mutate(total_obs = sum(num_obs_spp), dataset = "Raw EUSA EPT")
+```
+
+
+```{r}
+#| label: get-num-spp-final-eusa
+final_EUSA_EPT_totals <- final_EUSA_EPT |>
+  group_by(species, life_stage) |>
+  # Summarize # obs, plec, tric
+  summarize(num_obs_stage = n()) |>
+  ungroup() |>
+  mutate(total_obs = sum(num_obs_stage), dataset = "Final EUSA EPT") |>
+  group_by(species) |>
+  mutate(num_obs_spp = sum(num_obs_stage)) |>
+  ungroup() |>
+  relocate(num_obs_spp, .after = life_stage)
+```
+
+
+```{r}
+#| label: create-spp-table
+final_EUSA_EPT_totals_spp <- final_EUSA_EPT_totals |>
+  select(-num_obs_stage, -life_stage) |>
+  mutate(species = str_to_lower(species))
+
+combined_spp_totals <- bind_rows(
+  raw_EPT_totals,
+  raw_EUSA_EPT_totals,
+  final_EUSA_EPT_totals_spp
+) |>
+  distinct(dataset, species, total_obs, .keep_all = TRUE)
+
+pivoted_spp_totals <- combined_spp_totals |>
+  pivot_wider(
+    names_from = species,
+    values_from = num_obs_spp
+  ) |>
+  relocate(total_obs, .after = last_col())
+
+
+ft <- flextable(pivoted_spp_totals) |>
+  set_header_labels(
+    dataset = "Dataset",
+    ephemeroptera = "Ephemeroptera\nObservations",
+    plecoptera = "Plecoptera\nObservations",
+    trichoptera = "Trichoptera\nObservations",
+    total_obs = "Total EPT\nObservations"
+  ) |>
+  theme_booktabs() |>
+  autofit() |>
+  align(j = c(2, 3), align = "center", part = "all")
+
+doc <- read_docx() |>
+  body_add_par("EPT Order-Level Summary", style = "heading 1") |>
+  body_add_flextable(value = ft)
+
+print(
+  doc,
+  target = here(L306_figs_dir, "306a_dataset_order_table.docx")
+)
+
+# Clean up
+rm(
+  raw_EPT_totals,
+  raw_EUSA_EPT_totals,
+  final_EUSA_EPT_totals_spp,
+  combined_spp_totals,
+  pivoted_spp_totals,
+  ft,
+  doc
+)
+```
+
+
+
+
+```{r}
+#| label: create-spp-figure
+
+```
+
+
+## final data totals
+
+### prep data
+
+```{r}
+#| label: read-inat-metadata
+# Join in iNat metadata
+final_EUSA_EPT_metadata <- final_EUSA_EPT |>
+  select(species, life_stage, observation_id) |>
+  left_join(
+    # Read in iNat metadata
+    read_rds(here(
+      L2_data_dir,
+      "202a_images_clean_EUSA_EPT_obs.rds"
+    )),
+    join_by(observation_id == id)
+  ) |>
+  select(
+    species,
+    life_stage,
+    observation_id,
+    quality_grade,
+    annotations,
+    identifications,
+    identifications_count,
+    user.id
+  )
+```
+
+
+```{r}
+#| label: prep-user-info
+# Observers
+EUSA_EPT_observers_df <- final_EUSA_EPT_metadata |>
+  distinct(species, user.id)
+
+EUSA_EPT_identifiers_df <- final_EUSA_EPT_metadata |>
+  select(species, identifications) |>
+  unnest(identifications, names_sep = "_") |>
+  distinct(species, identifications_user.id)
+
+EUSA_EPT_annotators_df <- final_EUSA_EPT_metadata |>
+  select(species, annotations) |>
+  tidyr::unnest(annotations, names_sep = "_") |>
+  distinct(species, annotations_user.id)
+
+
+# # Identifiers
+# ids_df <- final_EUSA_EPT_metadata$identifications
+# identifiers_data <- tibble()
+
+# identifiers_data <- bind_rows(ids_df)
+# EUSA_EPT_identifiers_df <- identifiers_data |>
+#   distinct(user.id)
+
+# # Annotators
+# anns_df <- final_EUSA_EPT_metadata$annotations
+# annotators_data <- tibble()
+
+# annotators_data <- bind_rows(anns_df)
+# EUSA_EPT_annotators_df <- annotators_data |>
+#   distinct(user.id)
+
+# Join user types
+EUSA_EPT_users <- bind_rows(
+  "Annotator" = EUSA_EPT_annotators_df,
+  "Observer" = EUSA_EPT_observers_df,
+  "Identifier" = EUSA_EPT_identifiers_df,
+  .id = "contributer_type"
+)
+
+rm(
+  identifiers_data,
+  ids_df,
+  annotators_data,
+  anns_df,
+  EUSA_EPT_annotators_df,
+  EUSA_EPT_observers_df,
+  EUSA_EPT_identifiers_df
+)
+```
+
+```{r}
+#| label: prep-research-grade
+EUSA_EPT_obs_status <- final_EUSA_EPT_metadata |>
+  filter_out(life_stage == "eggs") |>
+  mutate(
+    species = str_trim(species),
+    life_stage = str_to_title(life_stage),
+    species = factor(
+      species,
+      levels = c("Ephemeroptera", "Plecoptera", "Trichoptera")
+    ),
+    quality_grade = fct_recode(
+      quality_grade,
+      "Needs ID" = "needs_id",
+      "RG" = "research"
+    )
+  ) |>
+  group_by(species, life_stage, quality_grade) |>
+  summarize(num_obs_stage_grade = n(), .groups = "drop") |>
+  group_by(species, life_stage) |>
+  mutate(num_obs_stage = sum(num_obs_stage_grade)) |>
+  ungroup() |>
+  group_by(species) |>
+  mutate(num_obs_spp = sum(num_obs_stage_grade)) |>
+  ungroup() |>
+  mutate(
+    prop = num_obs_stage_grade / sum(num_obs_stage_grade),
+
+    ls_label = paste0(
+      life_stage,
+      "\n",
+      str_trim(format(as.numeric(num_obs_stage), big.mark = ","))
+    ),
+    taxa_label = paste0(
+      species,
+      "\n",
+      str_trim(format(as.numeric(num_obs_spp), big.mark = ","))
+    ),
+    grade_label = paste0(
+      quality_grade,
+      "\n",
+      str_trim(format(as.numeric(num_obs_stage_grade), big.mark = ","))
+    ),
+    ls_fill_key = paste(species, life_stage, sep = " - "),
+    grade_fill_key = paste(species, life_stage, quality_grade, sep = " - ")
+  ) |>
+  arrange(species, life_stage, quality_grade)
+```
+
+```{r}
+#| label: prep-ids
+EUSA_EPT_ids_count <- final_EUSA_EPT_metadata |>
+  group_by(species, life_stage, observation_id) |>
+  unnest(identifications, names_sep = "_") |>
+  summarize(total_IDs_count = n_distinct(identifications_id)) |>
+  ungroup()
+```
+
+```{r}
+#| label: prep-ann
+EUSA_EPT_ann_count <- final_EUSA_EPT_metadata |>
+  group_by(species, life_stage, observation_id) |>
+  unnest(annotations, names_sep = "_") |>
+  summarize(total_ann_count = n_distinct(annotations_uuid)) |>
+  ungroup()
+```
+
+
+
+### create viz
+
+```{r}
+#| label: create-rg-sunburst
+# Inner Ring Summary (Species)
+species_summary <- EUSA_EPT_obs_status |>
+  group_by(species, taxa_label) |>
+  summarise(prop_species = sum(prop), .groups = "drop")
+
+# Middle Ring Summary (Life Stage)
+lifestage_summary <- EUSA_EPT_obs_status |>
+  group_by(species, life_stage, ls_fill_key, ls_label) |>
+  summarise(prop_ls = sum(prop), .groups = "drop")
+
+
+# Create plot
+grade_plot <- ggplot(EUSA_EPT_obs_status, aes(y = prop)) +
+  # Ring 1: Species
+  geom_bar(
+    data = species_summary,
+    aes(x = 0.8, y = prop_species, fill = species),
+    stat = "identity",
+    width = 1.6,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    data = species_summary,
+    aes(x = 0.8, y = prop_species, label = taxa_label, group = species),
+    position = position_stack(vjust = 0.5),
+    size = 4.2,
+    color = "white",
+    fontface = "bold"
+  ) +
+
+  # Ring 2: life stage
+  geom_bar(
+    data = lifestage_summary,
+    aes(x = 2, y = prop_ls, fill = ls_fill_key),
+    stat = "identity",
+    width = 0.8,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    data = lifestage_summary,
+    aes(x = 2, y = prop_ls, label = ls_label, group = ls_fill_key),
+    position = position_stack(vjust = 0.5),
+    size = 3.8,
+    color = "black"
+  ) +
+
+  # Ring 3: grade status
+  geom_bar(
+    aes(x = 2.8, y = prop, fill = grade_fill_key),
+    stat = "identity",
+    width = 0.8,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    aes(x = 3.6, y = prop, label = grade_label, group = grade_fill_key),
+    position = position_stack(vjust = 0.5),
+    size = 3.2,
+    color = "black"
+  ) +
+
+  scale_fill_manual(values = custom_colors) +
+  coord_polar(theta = "y", clip = "off") +
+  xlim(-0.2, 4.2) +
+  theme_void() +
+  theme(
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+  ) +
+  labs(
+    title = "Distribution of Quality-Grade Observation Data Across iNaturalist Data, Taxa, and Life Stage"
+  )
+
+
+ggsave(
+  filename = here(
+    L306_figs_dir,
+    "306_inat_obs_taxa_stage_grade.png"
+  ),
+  plot = grade_plot,
+  width = 16,
+  height = 10,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+
+```{r}
+#| label: create-rg-table
+summary_table_data <- EUSA_EPT_obs_status |>
+  mutate(
+    # Percent of total dataset
+    pct_total = percent(
+      num_obs_stage_grade / sum(num_obs_stage_grade),
+      accuracy = 0.1
+    ),
+    # Percent within each species
+    pct_within_spp = percent(num_obs_stage_grade / num_obs_spp, accuracy = 0.1),
+    # Format counts with commas
+    count_formatted = format(num_obs_stage_grade, big.mark = ",")
+  ) |>
+  select(
+    `Order` = species,
+    `Life Stage` = life_stage,
+    `Quality Grade` = quality_grade,
+    `Observations (N)` = count_formatted,
+    `% of Total` = pct_total,
+    `% within Order` = pct_within_spp
+  )
+
+ft <- flextable(summary_table_data) |>
+  theme_booktabs() |>
+  bold(part = "header") |>
+  align(j = 1:3, align = "left", part = "all") |>
+  align(j = 4:6, align = "right", part = "all") |>
+  autofit() |>
+  padding(padding = 6, part = "all")
+
+doc <- read_docx() |>
+  body_add_par("EPT Observation Summary Table", style = "heading 1") |>
+  body_add_par(
+    "Breakdown of observation counts and percentages by order, life stage, and quality grade.",
+    style = "Normal"
+  ) |>
+  body_add_flextable(ft)
+
+# Save Word doc
+print(doc, target = here(L306_figs_dir, "306_inat_obs_table.docx"))
+```
+
+```{r}
+#| label: create-users-count-bar
+# [X] # observeres # identifiers (bar)
+
+users_plot <- EUSA_EPT_users |>
+  ggplot(aes(x = contributer_type, fill = species)) +
+  geom_bar(position = "dodge", color = "white") +
+  geom_text(
+    stat = "count",
+    aes(label = scales::comma(after_stat(count))),
+    position = position_dodge(width = 0.9),
+    vjust = -0.5,
+    size = 3.5
+  ) +
+  #facet_wrap(~ species) +
+  scale_fill_manual(values = custom_colors) +
+  scale_y_continuous(
+    labels = scales::comma,
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  labs(
+    x = "Contributor Type",
+    y = "Number of Distinct iNaturalist Users",
+    fill = "Taxon",
+    title = "Unique iNaturalist Users per Contributor Type by Taxon"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    axis.title = element_text(face = "bold")
+  )
+
+ggsave(
+  filename = here(L306_figs_dir, "306_inat_users.png"),
+  plot = users_plot,
+  width = 10,
+  height = 6,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: create-num-id-ann-bar
+# [X] annoted/not (bar)
+# [X] # IDs (bar)
+
+combined_ids_ann <- EUSA_EPT_ids_count |>
+  left_join(EUSA_EPT_ann_count, join_by(species, life_stage, observation_id)) |>
+  mutate(total_ann_count = replace_na(total_ann_count, 0)) |>
+  pivot_longer(
+    cols = c(total_IDs_count, total_ann_count),
+    names_to = "activity_type",
+    values_to = "n_actions"
+  ) |>
+  mutate(
+    activity_type = replace_values(
+      activity_type,
+      "total_IDs_count" ~ "Identifications",
+      "total_ann_count" ~ "Annotations"
+    ),
+    activity_type = factor(
+      activity_type,
+      levels = c("Identifications", "Annotations")
+    ),
+    # Cap values at 5
+    action_bin = if_else(n_actions >= 5, "5+", as.character(n_actions)),
+    action_bin = factor(action_bin, levels = c("0", "1", "2", "3", "4", "5+"))
+  ) |>
+  group_by(activity_type, species, action_bin) |>
+  summarise(num_observations = n(), .groups = "drop")
+
+ids_anns_plot <- combined_ids_ann |>
+  ggplot(aes(x = factor(action_bin), y = num_observations, fill = species)) +
+  geom_col(
+    position = position_dodge(width = 0.8),
+    width = 0.7,
+    color = "white"
+  ) +
+  # Count labels above each bar
+  geom_text(
+    aes(label = scales::comma(num_observations)),
+    position = position_dodge(width = 0.8),
+    vjust = -0.4,
+    size = 2.8
+  ) +
+  facet_wrap(~activity_type, ncol = 1, scales = "free_y") +
+  scale_y_continuous(
+    labels = scales::comma,
+    expand = expansion(mult = c(0, 0.18))
+  ) +
+  scale_fill_manual(values = custom_colors) +
+  labs(
+    x = "Number of Actions per Observation",
+    y = "Number of Observations",
+    fill = "Taxon",
+    title = "Distribution of Identifications & Annotations per Observation"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    strip.text = element_text(face = "bold", size = 11),
+    strip.background = element_rect(fill = "#F0F0F0", color = NA),
+    axis.title = element_text(face = "bold"),
+    legend.position = "none"
+  )
+
+ggsave(
+  filename = here(L306_figs_dir, "306_inat_num_ids_ann.png"),
+  plot = ids_anns_plot,
+  width = 10,
+  height = 6,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: fig1-combined
+ggsave(
+  filename = here(L306_figs_dir, "306_fig1.png"),
+  plot = grade_plot + (users_plot / ids_anns_plot),
+  width = 18,
+  height = 10,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+
+```{r}
+#| label: create-distr-map
+# [X] % of global data (simple stat)
+# [] map of obs study distribution
+```
+
+
+
+### summary stats
+
+```{r}
+#| label: summarize-prop-study
+num_obs_study <- final_EUSA_EPT_metadata |>
+  summarize(total_obs = n_distinct(observation_id)) |>
+  pull()
+
+num_obs_globe <- raw_EPT |>
+  # Dates 2000-2025
+  filter(between(observed_on_details.year, 2000, 2025)) |>
+  # Grab species label
+  mutate(
+    species = case_when(
+      str_to_lower(taxon.name) == EPT[1] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[1])) ~ EPT[1],
+      str_to_lower(taxon.name) == EPT[2] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[2])) ~ EPT[2],
+      str_to_lower(taxon.name) == EPT[3] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[3])) ~ EPT[3],
+      .default = NA_character_
+    )
+  ) |>
+  summarize(total_obs = n_distinct(id)) |>
+  pull()
+
+prop_in_study <- num_obs_study / num_obs_globe * 100
+print(prop_in_study) # 10.50%
+```
+
+```{r}
+#| label: summarize-grade
+# Not research grade
+not_rg <- EUSA_EPT_obs_status |>
+  filter(quality_grade != "RG") |>
+  summarize(not_rg = sum(num_obs_stage_grade)) |>
+  pull()
+
+prop_not_rg <- not_rg / num_obs_study * 100
+print(prop_not_rg) #91.909%
+```
+
+```{r}
+#| label: summarize-ann
+zero_ann <- combined_ids_ann |>
+  filter(activity_type == "Annotations" & action_bin == "0") |>
+  summarize(zero_ann = sum(num_observations)) |>
+  pull()
+
+prop_zero_ann <- zero_ann / num_obs_study * 100
+print(prop_zero_ann) # 85.97%
+```
+
+
+```{r}
+#| label: summarize-ids
+one_ids <- combined_ids_ann |>
+  filter(activity_type == "Identifications" & action_bin == "1") |>
+  summarize(one_ids = sum(num_observations)) |>
+  pull()
+
+prop_one_ids <- one_ids / num_obs_study * 100
+print(prop_one_ids) # 50.12%
+```
+
+```{r}
+#| label: summarize-users
+# Unique users by conitributor type
+unique_users <- EUSA_EPT_users |>
+  pivot_longer(
+    cols = c(annotations_user.id, user.id, identifications_user.id),
+    names_to = "source_column",
+    values_to = "all_user_ids",
+    values_drop_na = TRUE
+  ) |>
+  group_by(contributer_type) |>
+  summarize(num_contributers = n_distinct(all_user_ids), .groups = "drop")
+print(unique_users)
+# 1194 annotators
+# 15025 identifiers
+# 14220 observers
+```
+
+```{r}
+#| label: summarize-life stages
+unique_life_stages <- EUSA_EPT_obs_status |>
+  filter(life_stage == "Immature") |>
+  summarize(immature_sum = sum(num_obs_stage_grade)) |>
+  pull()
+
+
+prop_immature <- unique_life_stages / num_obs_study * 100
+prop_adult <- 100 - prop_immature
+print(prop_immature) #11.66%
+print(prop_adult) #88.339%
+```
+
+
+# GBIF data summary
+
+
+```{r}
+#| label: read-GBIF-data
+EUSA_EPT_gbif_df <- readRDS(here(
+  L2_data_dir,
+  "209_occurrence_datasets",
+  "209b_EUSA_EPT_gbif.rds"
+))
+
+
+gbif_family_df <- EUSA_EPT_gbif_df |>
+  filter(family %in% family_gbif_list) |>
+  select(
+    gbifID,
+    occurrenceID,
+    order,
+    family,
+    life_stage = lifeStage,
+    long = decimalLongitude,
+    lat = decimalLatitude
+  ) |>
+  mutate(life_stage = str_to_lower(life_stage))
+
+# ison_data_gbif <- gbif_family_df |>
+#   filter(family == family_gbif_list[1])
+# pter_data_gbif <- gbif_family_df |>
+#   filter(family == family_gbif_list[2])
+# phil_data_gbif <- gbif_family_df |>
+#   filter(family == family_gbif_list[3])
+```
+
+
+## species totals
+
+```{r}
+#| label: prep-summary-data
+# iNat order-level summary by taxa
+order_data_inat <- final_EUSA_EPT_totals |>
+  rename(order = species) |>
+  mutate(dataset = "iNat Order", family = NA) |>
+  relocate(family, .after = order)
+
+# iNat family-level summary by taxa
+family_data_inat <- readRDS(here(
+  L2_data_dir,
+  "209_occurrence_datasets",
+  "209zy_inat_family_metadata.rds"
+)) |>
+  group_by(order, family, life_stage) |>
+  summarize(num_obs_stage = n()) |>
+  ungroup() |>
+  mutate(total_obs = sum(num_obs_stage), dataset = "iNat Family") |>
+  group_by(order, family) |>
+  mutate(num_obs_spp = sum(num_obs_stage)) |>
+  ungroup() |>
+  relocate(num_obs_spp, .after = life_stage)
+
+
+# GBIF family-level summary by taxa
+gbif_family_df_totals <- gbif_family_df |>
+  group_by(order, family, life_stage) |>
+  summarize(num_obs_stage = n()) |>
+  ungroup() |>
+  mutate(total_obs = sum(num_obs_stage), dataset = "GBIF Family") |>
+  group_by(order, family) |>
+  mutate(num_obs_spp = sum(num_obs_stage)) |>
+  ungroup() |>
+  relocate(num_obs_spp, .after = life_stage)
+```
+
+
+
+
+```{r}
+#| label: create-spp-table
+# order of datasetes in table
+dataset_order <- c("iNat Order", "iNat Family", "GBIF Family")
+
+combined_spp_totals <- bind_rows(
+  order_data_inat,
+  family_data_inat,
+  gbif_family_df_totals
+) |>
+  mutate(
+    taxa = if_else(
+      is.na(family) | family == "NA",
+      order,
+      paste0(family, " (", order, ")")
+    ),
+    life_stage = str_to_title(life_stage),
+    dataset = factor(dataset, levels = dataset_order)
+  ) |>
+  select(dataset, taxa, life_stage, num_obs = num_obs_stage)
+
+# Subtotal rows
+taxa_totals <- combined_spp_totals |>
+  group_by(dataset, taxa) |>
+  summarise(
+    life_stage = "Taxa Total",
+    num_obs = sum(num_obs),
+    .groups = "drop"
+  )
+
+dataset_totals <- combined_spp_totals |>
+  group_by(dataset) |>
+  summarise(
+    taxa = "Dataset Total",
+    life_stage = "",
+    num_obs = sum(num_obs),
+    .groups = "drop"
+  )
+
+# Compile table rows
+combined_all_totals <- bind_rows(
+  combined_spp_totals |> mutate(sort_type = 1),
+  taxa_totals |> mutate(sort_type = 2),
+  dataset_totals |> mutate(sort_type = 3)
+) |>
+  mutate(
+    taxa_sort = if_else(taxa == "Dataset Total", "ZZZ_Dataset_Total", taxa),
+    dataset_char = as.character(dataset)
+  ) |>
+  arrange(dataset, taxa_sort, sort_type, life_stage) |>
+  select(dataset = dataset_char, taxa, life_stage, num_obs)
+
+# Setup flextable
+ft <- flextable(combined_all_totals) |>
+  set_header_labels(
+    dataset = "Dataset",
+    taxa = "Taxa (Order / Family)",
+    life_stage = "Life Stage",
+    num_obs = "Observations"
+  ) |>
+  theme_booktabs() |>
+  autofit() |>
+  merge_v(j = "dataset") |>
+  valign(valign = "center", part = "body") |>
+  align(j = 4, align = "right", part = "all")
+
+taxa_summary_rows <- which(combined_all_totals$life_stage == "Taxa Total")
+dataset_summary_rows <- which(combined_all_totals$taxa == "Dataset Total")
+inat_order_rows <- which(combined_all_totals$dataset == "iNat Order")
+inat_fam_data_row <- which(
+  combined_all_totals$dataset == "iNat Family" &
+    combined_all_totals$taxa == "Dataset Total"
+)
+inat_fam_rows <- which(combined_all_totals$dataset == "iNat Family")
+gbif_rows <- which(combined_all_totals$dataset == "GBIF Family")
+
+ft <- ft |>
+  # Dataset column specific coloring
+  bg(i = inat_order_rows, j = "dataset", bg = "#EAEAEA", part = "body") |>
+  bg(i = inat_fam_rows, j = "dataset", bg = "#DCDCDC", part = "body") |>
+  bg(i = gbif_rows, j = "dataset", bg = "#EAEAEA", part = "body") |>
+  # Summary rows styling across the table
+  bold(i = taxa_summary_rows, bold = TRUE, part = "body") |>
+  bg(i = taxa_summary_rows, bg = "#F9F9F9", part = "body") |>
+  bold(i = dataset_summary_rows, bold = TRUE, part = "body") |>
+  bg(i = dataset_summary_rows, bg = "#EAEAEA", part = "body") |>
+  bg(i = inat_fam_data_row, bg = "#DCDCDC", part = "body")
+
+
+doc <- read_docx() |>
+  body_add_par("Dataset, Taxa, Life Stage Summary", style = "heading 1") |>
+  body_add_flextable(value = ft)
+
+print(
+  doc,
+  target = here(L306_figs_dir, "306b_dataset_family_stage_table.docx")
+)
+
+# Clean up
+rm(
+  combined_spp_totals,
+  taxa_summary_rows,
+  dataset_summary_rows,
+  inat_order_rows,
+  inat_fam_data_row,
+  inat_fam_rows,
+  gbif_rows,
+  combined_all_totals,
+  dataset_totals,
+  taxa_totals,
+  dataset_order,
+  ft,
+  doc
+)
+```
+
+
+```{r}
+#| label: grab-inat-gbif-summary-stat
+n_inat_adult <- combined_spp_totals |>
+  filter(dataset == "iNat Family") |>
+  mutate(total_obs = sum(num_obs)) |>
+  filter(dataset == "iNat Family" & life_stage == "Adult") |>
+  mutate(adult_n = sum(num_obs)) |>
+  pull(total_obs, adult_n)
+
+n_inat_adult
+# 940 adults
+# 1302 total
+940 / 1302 * 100
+# 72.20% adults in the iNat dataset
+
+n_gbif_adult <- combined_spp_totals |>
+  filter(dataset == "GBIF Family") |>
+  mutate(total_obs = sum(num_obs)) |>
+  filter(dataset == "GBIF Family" & life_stage == "Adult") |>
+  mutate(adult_n = sum(num_obs)) |>
+  pull(total_obs, adult_n)
+
+# 688 adults
+# 1010 total
+688 / 1010 * 100
+# 68.12% adults in the GBIF dataset
+```
+
+```{r}
+#| label: create-spp-fig
+dataset_order <- c(
+  "iNaturalist Order-Level Dataset",
+  "iNaturalist Family-Level Dataset",
+  "GBIF Family-Level Dataset"
+)
+
+combined_spp_totals <- bind_rows(
+  order_data_inat |> mutate(dataset = "iNaturalist Order-Level Dataset"),
+  family_data_inat |> mutate(dataset = "iNaturalist Family-Level Dataset"),
+  gbif_family_df_totals |> mutate(dataset = "GBIF Family-Level Dataset")
+) |>
+  filter_out(
+    dataset == "iNaturalist Order-Level Dataset" & life_stage == "eggs"
+  ) |>
+  mutate(
+    taxa = if_else(
+      is.na(family) | family == "NA",
+      order,
+      family
+    ),
+    life_stage = str_to_title(life_stage),
+    dataset = factor(dataset, levels = dataset_order),
+    fill_key = factor(
+      paste(order, life_stage, sep = " - "),
+      levels = c(
+        "Ephemeroptera - Adult",
+        "Ephemeroptera - Immature",
+        "Ephemeroptera - Eggs",
+        "Plecoptera - Adult",
+        "Plecoptera - Immature",
+        "Plecoptera - Eggs",
+        "Trichoptera - Adult",
+        "Trichoptera - Immature"
+      )
+    ),
+    order = factor(
+      order,
+      levels = c("Ephemeroptera", "Plecoptera", "Trichoptera")
+    ),
+    ls_label = paste0(
+      life_stage,
+      "\n",
+      str_trim(format(as.numeric(num_obs_stage), big.mark = ","))
+    )
+  ) |>
+  select(
+    dataset,
+    order,
+    taxa,
+    life_stage,
+    ls_label,
+    fill_key,
+    num_obs = num_obs_stage
+  ) |>
+  arrange(dataset, order, taxa, life_stage) |>
+  group_by(dataset) |>
+  mutate(prop = num_obs / sum(num_obs)) |>
+  ungroup()
+
+
+taxa_summary <- combined_spp_totals |>
+  group_by(dataset, order, taxa) |>
+  summarise(
+    num_obs_taxa = sum(num_obs),
+    prop_taxa = sum(prop),
+    .groups = "drop"
+  ) |>
+  mutate(
+    taxa_label = paste0(
+      taxa,
+      "\n",
+      str_trim(format(as.numeric(num_obs_taxa), big.mark = ","))
+    )
+  )
+
+
+# Create plot
+totals_plot <- ggplot(combined_spp_totals, aes(y = prop)) +
+  facet_wrap(~dataset, ncol = 3) +
+  # Inner Ring (x = 1): Taxa
+  geom_bar(
+    data = taxa_summary,
+    aes(x = 1, y = prop_taxa, fill = order),
+    stat = "identity",
+    width = 2.0,
+    position = "stack",
+    color = "white"
+  ) +
+  # Inner Ring Labels
+  geom_text(
+    data = taxa_summary,
+    aes(x = 0.75, y = prop_taxa, label = taxa_label, group = order),
+    position = position_stack(vjust = 0.5),
+    size = 5.2,
+    fontface = "bold",
+    color = "white",
+    lineheight = 0.85
+  ) +
+
+  # Outer Ring (x = 2): Life Stage (inherits order's color shade)
+  geom_bar(
+    data = combined_spp_totals,
+    aes(x = 2, y = prop, fill = fill_key),
+    stat = "identity",
+    width = 0.8,
+    position = "stack",
+    color = "white"
+  ) +
+  # Outer Ring Labels
+  geom_text(
+    data = combined_spp_totals,
+    aes(x = 2, y = prop, label = ls_label, group = fill_key),
+    position = position_stack(vjust = 0.5),
+    size = 4.5,
+    color = "black",
+    lineheight = 0.85
+  ) +
+
+  coord_polar(theta = "y") +
+  xlim(-0.2, 2.7) +
+  scale_fill_manual(values = custom_colors) +
+  theme_void(base_size = 16) +
+  theme(
+    strip.text = element_text(size = 16, face = "bold"),
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    panel.spacing = unit(0.2, "lines"),
+    plot.margin = margin(t = 5, r = 5, b = -20, l = 5)
+  ) +
+  labs(
+    title = "Distribution of Observation Data Across iNaturalist and GBIF Datasets, Taxa, and Life Stage"
+  )
+
+ggsave(
+  filename = here(
+    L306_figs_dir,
+    "306_obs_data_taxa_stage.png"
+  ),
+  plot = totals_plot,
+  width = 21,
+  height = 8,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+
+#rm(totals_plot, combined_spp_totals, dataset_order, custom_colors, taxa_summary)
+```
+
+
+
+## family maps
+
+
+```{r}
+#| label: prep-family-map-data
+# Get EUSA spatial area
+bias_tif <- rast(here(
+  L2_data_dir,
+  "204_WGS84_bias_1km",
+  "204_WGS84_103c_EUSA_ecoregion_1km_mask.tif"
+))
+
+study_area_sf <- bias_tif |>
+  terra::as.polygons() |>
+  st_as_sf() |>
+  st_union() |>
+  st_transform(crs = 4326)
+
+
+# iNat family-level summary by taxa
+inat_sf <- readRDS(here(
+  L2_data_dir,
+  "209_occurrence_datasets",
+  "209zy_inat_family_metadata.rds"
+)) |>
+  filter(!is.na(long) & !is.na(lat)) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+# gbif summary by taxa
+gbif_sf <- gbif_family_df |>
+  filter(!is.na(long) & !is.na(lat)) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+```
+
+
+```{r}
+#| label: shapes-color-ref
+# Define fillable shapes for the 3 families (21 = Circle, 22 = Square, 24 = Triangle)
+shape_values <- c(
+  "Isonychiidae - Adult" = 21,
+  "Isonychiidae - Immature" = 21,
+  "Philopotamidae - Adult" = 22,
+  "Philopotamidae - Immature" = 22,
+  "Pteronarcyidae - Adult" = 24,
+  "Pteronarcyidae - Immature" = 24
+)
+
+# Border/Outline colors matching order colors
+color_values <- c(
+  "Isonychiidae - Adult" = "#1F77B4",
+  "Isonychiidae - Immature" = "#1F77B4",
+  "Philopotamidae - Adult" = "#FF7F0E",
+  "Philopotamidae - Immature" = "#FF7F0E",
+  "Pteronarcyidae - Adult" = "#2CA02C",
+  "Pteronarcyidae - Immature" = "#2CA02C"
+)
+
+# Interior fill colors: Order color for adults, transparent ("NA") for immatures
+fill_values <- c(
+  "Isonychiidae - Adult" = "#1F77B4",
+  "Isonychiidae - Immature" = "NA",
+  "Philopotamidae - Adult" = "#FF7F0E",
+  "Philopotamidae - Immature" = "NA",
+  "Pteronarcyidae - Adult" = "#2CA02C",
+  "Pteronarcyidae - Immature" = "NA"
+)
+```
+
+```{r}
+#| label: prep-data-to-map
+# Helper function to process dataframes for aesthetic mapping
+prep_taxa_data <- function(df_sf) {
+  df_sf |>
+    mutate(
+      life_stage = str_to_title(trimws(life_stage)),
+      family_lifestage = factor(
+        paste(family, "-", life_stage),
+        levels = names(shape_values)
+      )
+    )
+}
+
+inat_sf <- prep_taxa_data(inat_sf)
+gbif_sf <- prep_taxa_data(gbif_sf)
+```
+
+```{r}
+#| label: FX-create-map
+create_taxa_map <- function(data_sf, title_text, show_legend = FALSE) {
+  # Get spatial extent limits from the study area polygon
+  bbox <- st_bbox(study_area_sf)
+
+  # Add buffer padding to prevent clipping
+  x_range <- bbox["xmax"] - bbox["xmin"]
+  y_range <- bbox["ymax"] - bbox["ymin"]
+
+  xlim_padded <- c(
+    bbox["xmin"] - (x_range * 0.03),
+    bbox["xmax"] + (x_range * 0.03)
+  )
+  ylim_padded <- c(
+    bbox["ymin"] - (y_range * 0.03),
+    bbox["ymax"] + (y_range * 0.03)
+  )
+
+  p <- ggplot() +
+    # Base map North America
+    geom_sf(data = basemap_land, fill = "#EBEBEB", color = NA) +
+
+    # Base map USA states
+    geom_sf(data = basemap_states, fill = NA, color = "#CCCCCC", size = 0.3) +
+
+    # Study area polygon
+    geom_sf(
+      data = study_area_sf,
+      fill = "#D9E8F5",
+      color = "#2B5C8F",
+      size = 0.7,
+      alpha = 0.5
+    ) +
+
+    # Occurrence data
+    geom_sf(
+      data = data_sf,
+      aes(
+        shape = family_lifestage,
+        color = family_lifestage,
+        fill = family_lifestage
+      ),
+      stroke = 0.8,
+      size = 2,
+      alpha = 0.85
+    ) +
+
+    # Padded Viewport limits
+    coord_sf(
+      xlim = xlim_padded,
+      ylim = ylim_padded,
+      expand = FALSE
+    ) +
+
+    scale_shape_manual(values = shape_values, name = "Taxa & Life Stage") +
+    scale_color_manual(values = color_values, name = "Taxa & Life Stage") +
+    scale_fill_manual(values = fill_values, name = "Taxa & Life Stage") +
+
+    labs(title = title_text, x = NULL, y = NULL) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 13),
+      panel.grid.major = element_line(
+        color = "#D0D0D0",
+        linetype = "dashed",
+        size = 0.2
+      ),
+      panel.background = element_rect(fill = "#C6E2FF", color = NA),
+      panel.border = element_rect(color = "#333333", fill = NA, size = 0.8),
+      axis.text = element_text(size = 8)
+    )
+
+  if (!show_legend) {
+    p <- p + theme(legend.position = "none")
+  } else {
+    p <- p +
+      theme(
+        legend.position = "right",
+        legend.title = element_text(face = "bold", size = 10),
+        legend.text = element_text(size = 9),
+        legend.background = element_rect(fill = "white", color = "#C0C0C0")
+      )
+  }
+
+  return(p)
+}
+```
+
+```{r}
+#| label: create-fam-maps
+pacman::p_load(pak, rnaturalearth, rnaturalearthdata, patchwork)
+
+# Grab basemaps
+basemap_land <- ne_countries(
+  scale = "medium",
+  continent = "North America",
+  returnclass = "sf"
+)
+basemap_states <- ne_states(
+  country = "United States of America",
+  iso_a2 = c("US", "CA"),
+  returnclass = "sf"
+)
+
+# Create my maps
+map_gbif <- create_taxa_map(gbif_sf, "GBIF Occurrences", show_legend = TRUE)
+map_inat <- create_taxa_map(
+  inat_sf,
+  "iNaturalist Observations",
+  show_legend = FALSE
+)
+
+# Combine using patchwork
+fam_map_combined <- map_inat +
+  map_gbif +
+  plot_annotation(
+    title = "Family-Level Occurrence Distributions across Eastern USA",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 15)
+    )
+  )
+
+# Display final figure
+fam_map_combined
+```
+
+```{r}
+#| label: save-fam-map
+ggsave(
+  filename = here(
+    L306_figs_dir,
+    "306_obs_fam_map_combined.png"
+  ),
+  plot = fam_map_combined,
+  width = 12,
+  height = 6,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+## Number of species in GBIF families
+
+
+```{r}
+#| label: num-spp-gbif-fam
+family_spp_stats <- readRDS(here(
+  L2_data_dir,
+  "208c_low_obs_taxa_clean_EUSA_gbif.rds"
+)) |>
+  filter(family %in% family_gbif_list) |>
+  # Get total occurrence count per distinct species
+  group_by(order, family, species) |>
+  summarize(
+    n_sp_occurrences = n_distinct(occurrenceID),
+    .groups = "drop_last"
+  ) |>
+  # Calculate Mean, SD, and spp count per fam
+  summarize(
+    num_species = n_distinct(species),
+    mean_records = mean(n_sp_occurrences, na.rm = TRUE),
+    sd_records = sd(n_sp_occurrences, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Display the summary table
+family_spp_stats
+
+#   order         family         num_species mean_records sd_records
+#   <chr>         <chr>                <int>        <dbl>      <dbl>
+# 1 Ephemeroptera Isonychiidae            10         26.3       42.5
+# 2 Plecoptera    Pteronarcyidae           6         27         26.1
+# 3 Trichoptera   Philopotamidae          15         43.6       54.2
+```
+
+# inat order map
+
+```{r}
+#| label: prep-data
+ept_sf <- final_EUSA_EPT |>
+  filter(!is.na(long) & !is.na(lat)) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+ept_sf <- ept_sf |>
+  mutate(
+    clean_stage = case_when(
+      grepl("adult", life_stage, ignore.case = TRUE) ~ "Adult",
+      grepl(
+        "immature|nymph|larva",
+        life_stage,
+        ignore.case = TRUE
+      ) ~ "Immature",
+      TRUE ~ tolower(trimws(as.character(life_stage)))
+    ),
+    order_name = trimws(species), # Order column
+    map_lifestage = factor(
+      paste(order_name, "-", clean_stage),
+      levels = names(shape_values_order)
+    )
+  ) %>%
+  mutate(
+    plot_order = case_when(
+      order_name == "Trichoptera" ~ 1,
+      order_name == "Ephemeroptera" ~ 2,
+      order_name == "Plecoptera" ~ 3
+    )
+  ) %>%
+  arrange(plot_order)
+```
+
+
+```{r}
+#| label: set-colors
+# Shapes by Order (21 = Circle, 22 = Square, 24 = Triangle)
+shape_values_order <- c(
+  "Ephemeroptera - Adult" = 21,
+  "Ephemeroptera - Immature" = 21,
+  "Plecoptera - Adult" = 22,
+  "Plecoptera - Immature" = 22,
+  "Trichoptera - Adult" = 24,
+  "Trichoptera - Immature" = 24
+)
+
+# Border/Outline colors matching Order colors
+color_values_order <- c(
+  "Ephemeroptera - Adult" = "#1F77B4", # Deep Blue
+  "Ephemeroptera - Immature" = "#1F77B4",
+  "Plecoptera - Adult" = "#2CA02C", # Deep Green
+  "Plecoptera - Immature" = "#2CA02C",
+  "Trichoptera - Adult" = "#FF7F0E", # Deep Orange
+  "Trichoptera - Immature" = "#FF7F0E"
+)
+
+# Interior fill colors: Order color for adults, transparent ("NA") for immatures
+fill_values_order <- c(
+  "Ephemeroptera - Adult" = "#1F77B4",
+  "Ephemeroptera - Immature" = "NA",
+  "Plecoptera - Adult" = "#2CA02C",
+  "Plecoptera - Immature" = "NA",
+  "Trichoptera - Adult" = "#FF7F0E",
+  "Trichoptera - Immature" = "NA"
+)
+```
+
+```{r}
+#| label: make-order-map
+# Calculate padded limits to prevent edge clipping
+bbox <- st_bbox(study_area_sf)
+x_range <- bbox["xmax"] - bbox["xmin"]
+y_range <- bbox["ymax"] - bbox["ymin"]
+
+xlim_padded <- c(
+  bbox["xmin"] - (x_range * 0.03),
+  bbox["xmax"] + (x_range * 0.03)
+)
+ylim_padded <- c(
+  bbox["ymin"] - (y_range * 0.03),
+  bbox["ymax"] + (y_range * 0.03)
+)
+
+order_map <- ggplot() +
+  # 1. BASEMAP: North America Landmass
+  geom_sf(data = basemap_land, fill = "#EBEBEB", color = NA) +
+
+  # 2. BASEMAP: State Boundaries
+  geom_sf(data = basemap_states, fill = NA, color = "#CCCCCC", size = 0.3) +
+
+  # 3. STUDY AREA FOOTPRINT
+  geom_sf(
+    data = study_area_sf,
+    fill = "#D9E8F5",
+    color = "#2B5C8F",
+    size = 0.7,
+    alpha = 0.4
+  ) +
+
+  # 4. ORDER OCCURRENCE POINTS
+  geom_sf(
+    data = ept_sf |> filter(!is.na(map_lifestage)),
+    aes(
+      shape = map_lifestage,
+      color = map_lifestage,
+      fill = map_lifestage
+    ),
+    stroke = 0.4,
+    size = 0.8,
+    alpha = 0.7
+  ) +
+  facet_wrap(~order_name, ncol = 3) +
+
+  # Padded Viewport limits
+  coord_sf(
+    xlim = xlim_padded,
+    ylim = ylim_padded,
+    expand = FALSE
+  ) +
+
+  scale_shape_manual(values = shape_values_order, name = "Order & Life Stage") +
+  scale_color_manual(values = color_values_order, name = "Order & Life Stage") +
+  scale_fill_manual(values = fill_values_order, name = "Order & Life Stage") +
+  guides(
+    shape = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1)),
+    color = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1)),
+    fill = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1))
+  ) +
+  labs(
+    title = "EPT Order-Level Occurrences Across Eastern USA",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    panel.grid.major = element_line(
+      color = "#D0D0D0",
+      linetype = "dashed",
+      size = 0.2
+    ),
+    panel.background = element_rect(fill = "#C6E2FF", color = NA),
+    panel.border = element_rect(color = "#333333", fill = NA, size = 0.8),
+    axis.text = element_text(size = 8),
+    legend.position = "right",
+    legend.title = element_text(face = "bold", size = 10),
+    legend.text = element_text(size = 9),
+    legend.background = element_rect(fill = "white", color = "#C0C0C0")
+  )
+
+# Display Map
+order_map
+```
+
+```{r}
+#| label: save-order-map
+ggsave(
+  filename = here(
+    L306_figs_dir,
+    "306_obs_order_map.png"
+  ),
+  plot = order_map,
+  width = 12,
+  height = 6,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+
+# fig 2
+
+```{r}
+#| label: curate-fig2-patched
+# top_plot_clean <- totals_plot +
+#   theme(plot.margin = margin(b = -20, t = 5, l = 5, r = 5)) # b = bottom margin
+
+# bottom_plot_clean <- fam_map_combined +
+#   theme(plot.margin = margin(t = 1, b = 5, l = 5, r = 5)) # t = top margin
+
+# # 2. Stack vertically with custom height ratio
+# final_plot <- top_plot_clean / bottom_plot_clean
+# final_plot
+
+# ggsave(
+#   filename = here(
+#     L306_figs_dir,
+#     "306_fig2.png"
+#   ),
+#   plot = final_plot,
+#   width = 16,
+#   height = 12,
+#   units = "in",
+#   dpi = 300,
+#   bg = "white"
+# )
+```

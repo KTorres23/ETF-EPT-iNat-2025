@@ -1,0 +1,144 @@
+---
+title: 300_curate_acknowledgements.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script curates a list of iNaturalist users whose identifications, observations, and annotations contributed to this research.
+date: 2026-09-12 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+
+Includes data from Canada!!
+
+# Set up environment
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here)
+
+# Set working directory
+here::i_am("scripts/L3/300_curate_acknowledgements.qmd")
+
+# Point to directories
+L2_data_dir <- here("data", "L2") # L2 data
+L3_data_dir <- here("data", "L3") # L3 data
+```
+
+
+# Read data
+
+```{r}
+#| label: read-inat-ept-data
+# Read in EPT data from iNaturalist
+EUSA_EPT_inat_df <- readRDS(here(
+  L2_data_dir,
+  "207a_EUSA_EPT_final_annotated.rds"
+)) |>
+  left_join(
+    read_csv(here(L2_data_dir, "201a_clean_EUSA_EPT_obs.csv")),
+    join_by("observation_id" == "id")
+  )
+
+# Join iNat metadata to study observations
+EUSA_EPT_metadata_df <- EUSA_EPT_inat_df |>
+  select(species, life_stage, observation_id, evidence_type) |>
+  left_join(
+    # Read in iNat metadata
+    read_rds(here(
+      L2_data_dir,
+      "202a_images_clean_EUSA_EPT_obs.rds"
+    )),
+    join_by(observation_id == id)
+  )
+
+table(EUSA_EPT_inat_df$species, EUSA_EPT_inat_df$life_stage)
+```
+
+
+# Get users
+
+```{r}
+#| label: get-observers
+EUSA_EPT_observers_df <- EUSA_EPT_metadata_df |>
+  distinct(user.id)
+
+EUSA_EPT_OBS_df <- EUSA_EPT_metadata_df |>
+  select(user.id, id = observation_id) |>
+  mutate(id = as.character(id))
+```
+
+
+```{r}
+#| label: get-identifiers
+ids_df <- EUSA_EPT_metadata_df$identifications
+identifiers_data <- tibble()
+
+identifiers_data <- bind_rows(ids_df)
+
+# Get identifiers & ID data
+EUSA_EPT_identifiers_df <- identifiers_data |>
+  distinct(user.id)
+EUSA_EPT_IDS_df <- identifiers_data |>
+  select(user.id, id) |>
+  mutate(id = as.character(id))
+
+rm(identifiers_data, ids_df)
+```
+
+```{r}
+#| label: get-annotators
+anns_df <- EUSA_EPT_metadata_df$annotations
+annotators_data <- tibble()
+
+annotators_data <- bind_rows(anns_df)
+
+# Get annotators & annotation data
+EUSA_EPT_annotators_df <- annotators_data |>
+  distinct(user.id)
+EUSA_EPT_ANN_df <- annotators_data |>
+  select(user.id, id = uuid) ## Annotation data only has `uuid`!!!
+
+rm(annotators_data, anns_df)
+```
+
+# Join User data
+
+```{r}
+#| label: join-dfs
+EUSA_EPT_users <- bind_rows(
+  EUSA_EPT_annotators_df,
+  EUSA_EPT_identifiers_df,
+  EUSA_EPT_observers_df
+) |>
+  distinct()
+
+EUSA_EPT_contrib_info <- bind_rows(
+  "annotation" = EUSA_EPT_ANN_df,
+  "observation" = EUSA_EPT_OBS_df,
+  "identification" = EUSA_EPT_IDS_df,
+  .id = "contribution_type"
+)
+```
+
+
+```{r}
+#| label: Export-data
+write_csv(EUSA_EPT_users, here(L3_data_dir, "300a_EUSA_EPT_inat_users.csv"))
+write_csv(
+  EUSA_EPT_contrib_info,
+  here(L3_data_dir, "300b_EUSA_EPT_inat_contributed_info.csv")
+)
+```
+
+
