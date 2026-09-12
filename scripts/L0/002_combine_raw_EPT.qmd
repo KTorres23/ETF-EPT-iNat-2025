@@ -1,5 +1,5 @@
 ---
-title: 101_combine_raw_EPT.qmd
+title: 002_combine_raw_EPT.qmd
 author: 
     - name: Karina Torres
       role: Author
@@ -25,11 +25,10 @@ if (!require("pacman")) {
 pacman::p_load(tidyverse, here, officer, flextable, sf)
 
 # Set working directory
-here::i_am("scripts/L1/101_combine_raw_EPT.qmd")
+here::i_am("scripts/L0/002_combine_raw_EPT.qmd")
 
 # Point to directories
 L0_data_dir <- here("data", "L0") # L0 data
-L1_data_dir <- here("data", "L1") # L1 data
 ```
 
 # Read data
@@ -87,12 +86,12 @@ EPT_sf <- raw_all |>
   st_as_sf(coords = c("long", "lat"), crs = 4326)
 
 # Save raw EPT observation data as CSV
-write_csv(raw_all, here(L1_data_dir, "101a_raw_EPT_obs.csv"))
+write_csv(raw_all, here(L0_data_dir, "002a_raw_EPT_obs.csv"))
 
 # Create directory to save SHP
-dir.create(here(L1_data_dir, "101b_raw_EPT_obs_shp"))
+dir.create(here(L0_data_dir, "002b_raw_EPT_obs_shp"))
 st_write(
   EPT_sf,
-  here(L1_data_dir, "101b_raw_EPT_obs_shp", "101b_raw_EPT_obs_shp.shp")
+  here(L0_data_dir, "002b_raw_EPT_obs_shp", "002b_raw_EPT_obs_shp.shp")
 )
 ```

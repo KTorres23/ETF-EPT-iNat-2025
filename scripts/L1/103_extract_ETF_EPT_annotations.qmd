@@ -1,5 +1,5 @@
 ---
-title: 207_extract_EUSA_EPT_annotations.qmd
+title: 103_extract_ETF_EPT_annotations.qmd
 author: 
     - name: Karina Torres
       role: Author
@@ -24,20 +24,19 @@ if (!require("pacman")) {
 pacman::p_load(tidyverse, here)
 
 # Set working directory
-here::i_am("scripts/L2/207_extract_EUSA_EPT_annotations.qmd")
+here::i_am("scripts/L1/103_extract_ETF_EPT_annotations.qmd")
 
 # Point to directories
 L0_data_dir <- here("data", "L0") # L0 data
 L1_data_dir <- here("data", "L1") # L1 data
-L2_data_dir <- here("data", "L2") # L2 data
 ```
 
 ```{r}
 #| label: read-data
-label_data <- read_csv(here(L2_data_dir, "203_EUSA_EPT_image_labels.csv"))
+label_data <- read_csv(here(L1_data_dir, "102_ETF_EPT_image_labels.csv"))
 
 # save a raw version backup
-#saveRDS(label_data, file = here(L2_data_dir, "203_EUSA_EPT_image_labels.rds"))
+#saveRDS(label_data, file = here(L1_data_dir, "102_ETF_EPT_image_labels.rds"))
 ```
 
 # Process data
@@ -103,7 +102,7 @@ for (label in standard_labels) {
 
 ## Data QA/QC
 Validated data - ~4hrs of data quality check (i.e., QA/QC)
-I corrected some annotations using the previous `203_label_EUSA_EPT_images_app.py`
+I corrected some annotations using the previous `102_label_ETF_EPT_images_app.py`
 
 ```{r}
 #| label: check-data-cols
@@ -316,7 +315,7 @@ For `cannot_identify` and `species_id_corrected`, observations were moved to a h
 | [12] | `fave_image` | Favorite images or observations to use for research communication & visualization purposes | `TRUE`, `FALSE` | logical | 
 | [13] | `cannot_identify` | could not identify to an EPT order for some reason described column `obs_issues` | `TRUE`, `FALSE` | logical | 
 | [14] | `inat_id_corrected` | ID corrected/updated on iNaturalist | `TRUE`, `FALSE` | logical | 
-| [15] | `obs_issues` | reason for an image not being annotated or being unable to annotate | `missing image` (no image was downloaded due to CC rights (see 202_get_EPT_images.qmd for more info)), `duplicate image` (observation image is visually duplicate to another observation), `unsure of ID` (unsure whether observation is EPT due to image resolution or lack of diagnostic characters), `copyrighted image` (image has copyright issues identified by me), `incorrect species ID` (species identification is incorrect), `NA` [NA = no issues with observation] | string | 
+| [15] | `obs_issues` | reason for an image not being annotated or being unable to annotate | `missing image` (no image was downloaded due to CC rights (see 101_get_EPT_images.qmd for more info)), `duplicate image` (observation image is visually duplicate to another observation), `unsure of ID` (unsure whether observation is EPT due to image resolution or lack of diagnostic characters), `copyrighted image` (image has copyright issues identified by me), `incorrect species ID` (species identification is incorrect), `NA` [NA = no issues with observation] | string | 
 | [16] | `species_id_corrected` | the corrected identification of the organism in the image | e.g., `Pterygota` | string | 
 
 
@@ -349,11 +348,11 @@ fave_data <- tidy_data |>
 ```{r}
 #| label: save-data
 export_list <- list(
-  "207a_EUSA_EPT_final_annotated.rds" = final_data,
-  "207b_EUSA_EPT_reject_annotated.rds" = reject_data,
-  "207c_EUSA_EPT_fave_annotated.rds" = final_data
+  "103a_ETF_EPT_final_annotated.rds" = final_data,
+  "103b_ETF_EPT_reject_annotated.rds" = reject_data,
+  "103c_ETF_EPT_fave_annotated.rds" = final_data
 )
 
-iwalk(export_list, ~ write_rds(.x, file = here(L2_data_dir, .y)))
+iwalk(export_list, ~ write_rds(.x, file = here(L1_data_dir, .y)))
 ```
 

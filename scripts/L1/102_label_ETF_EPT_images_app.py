@@ -1,4 +1,4 @@
-# 203_label_EUSA_EPT_images_app.py
+# 102_label_ETF_EPT_images_app.py
 # Karina Torres
 # Southern Illinois University
 # github.com/KTorres23
@@ -17,8 +17,8 @@ import threading
 
 ##### How to run script
 # 1. In terminal, run `py -m pip install streamlit pandas pillow`
-# 2. In terminal, navigate to "...EUSA-EPT-iNat-2025/" using run `cd "...full path.../EUSA-EPT-iNat-2025/"`
-# 3. In terminal, run `py -m streamlit run scripts/L2/203_label_EUSA_EPT_images_app.py`
+# 2. In terminal, navigate to "...ETF-EPT-iNat-2025/" using run `cd "...full path.../ETF-EPT-iNat-2025/"`
+# 3. In terminal, run `py -m streamlit run scripts/L1/102_label_ETF_EPT_images_app.py`
 # 4. Navigate to web browser and use web-based application for annotating EPT images
 
 
@@ -49,15 +49,15 @@ def make_square_main(img):
 # 1. Page Configuration
 st.set_page_config(page_title="EPT Annotation Tool", layout="wide")
 
-# Get the absolute path of the directory containing this script (scripts/L2)
+# Get the absolute path of the directory containing this script (scripts/L1)
 SCRIPT_DIR = Path(__file__).resolve().parent
-# Step backward two levels to reach the root 'EUSA-EPT-iNat-2025' directory
+# Step backward two levels to reach the root 'ETF-EPT-iNat-2025' directory
 ROOT_DIR = SCRIPT_DIR.parent.parent
 
 # Build absolute paths by joining the root directory to data folders
-BASE_DIR = ROOT_DIR / "data" / "L2" / "202c_EUSA_EPT_images"
-METADATA_CSV = ROOT_DIR / "data" / "L2" / "202b_images_metadata_EUSA_EPT.csv"
-OUTPUT_CSV = ROOT_DIR / "data" / "L2" / "203_EUSA_EPT_image_labels.csv"
+BASE_DIR = ROOT_DIR / "data" / "L1" / "101c_ETF_EPT_images"
+METADATA_CSV = ROOT_DIR / "data" / "L1" / "101b_images_metadata_ETF_EPT.csv"
+OUTPUT_CSV = ROOT_DIR / "data" / "L1" / "102_ETF_EPT_image_labels.csv"
 LABELS = [
     "Adult",
     "Nymph/Larva",
