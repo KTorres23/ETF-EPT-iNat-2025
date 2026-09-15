@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script prepares the EPT data & pulls images from the AWS into a local repo 
-date: 2026-09-12 # last modified
+date: 2026-09-15 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -119,7 +119,7 @@ https://github.com/inaturalist/inaturalist-open-data/tree/documentation
 #dest_file <- file.path(download_dir, paste0(spp, "obs_", id, "_", x, ".jpg"))
 
 # Create export directories
-image_path <- file.path("data", "L2", "101c_ETF_EPT_images")
+image_path <- file.path("data", "L1", "101c_ETF_EPT_images")
 image_dir <- here(image_path)
 e_dir <- here(image_path, "ephe_imgs")
 p_dir <- here(image_path, "plec_imgs")
