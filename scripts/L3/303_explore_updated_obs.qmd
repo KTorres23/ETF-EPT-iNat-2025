@@ -1,0 +1,513 @@
+---
+title: 303_explore_updated_obs.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script explores updated observations and original observation
+date: 2026-09-13 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+
+# Set up environment
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here, jsonlite, purrr)
+
+# Clear envionrment
+rm(list = ls())
+
+# Set working directory
+here::i_am("scripts/L3/303_explore_updated_obs.qmd")
+
+# Point to directory
+L0_data_dir <- here("data", "L0")
+L1_data_dir <- here("data", "L1")
+L3_data_dir <- here("data", "L3") # L3 data
+L301_data_dir <- here(L3_data_dir, "301_api_uploads")
+```
+
+# Read data 
+
+```{r}
+# # Read in annotation dataset
+# left_join(
+#   readRDS(
+#     here(
+#       L1_data_dir,
+#       "103a_ETF_EPT_final_annotated.rds"
+#     ),
+#     join_by(observation_id)
+#   )
+# )
+
+```
+
+## Original observations
+
+```{r}
+#| label: read-og-obs
+# original observations
+og_obs <- readRDS(here(
+  L301_data_dir,
+  "301b_ETF_EPT_IDS_api_uploads.rds"
+)) |>
+  # Read in iNat metadata
+  left_join(
+    read_rds(here(
+      L1_data_dir,
+      "101a_images_clean_ETF_EPT_obs.rds"
+    )),
+    join_by(observation_id == id)
+  ) |>
+  filter(batch_id == 0) # Test batch uploaded to iNat via API
+```
+
+```{r}
+#| label: parse-og-obs
+og_obs_base <- og_obs |>
+  select(
+    ## observation info
+    observation_id,
+    quality_grade,
+    ### community taxon
+    taxon_name = taxon.name,
+    taxon_id = taxon.id,
+    taxon_ancestry = taxon.min_species_ancestry,
+    taxon_species_id = taxon.min_species_taxon_id,
+    taxon_rank_level = taxon.rank_level,
+    taxon_rank = taxon.rank,
+    ### observer info
+    observer_id = user.id,
+    observer_login = user.login,
+    observer_obs_cnt = user.observations_count,
+    observer_ids_cnt = user.identifications_count,
+    observer_spp_cnt = user.species_count,
+    ### summary info (ids, com)
+    identifications_count,
+    num_identification_agreements,
+    num_identification_disagreements,
+    identification_disagreements_count,
+    identifications_some_agree,
+    comments_count,
+    ### dataframes of ids, ann, com
+    identifications,
+    comments,
+    annotations
+  )
+```
+
+### Original subtables of identifications, annotations, comments
+
+```{r}
+#| label: og-obs-ids-table
+og_obs_ids <- og_obs_base |>
+  select(observation_id, identifications) |>
+  unnest_longer(identifications) |>
+  unpack(identifications, names_sep = "_") |>
+  select(
+    observation_id,
+    identification_id = identifications_id,
+    identifier_comment = identifications_body,
+    identification_vision = identifications_vision,
+    identification_own = identifications_own_observation,
+    identifier_id = identifications_user.id,
+    identifier_login = identifications_user.login,
+    identification_taxon_id = identifications_taxon_id,
+    identification_current = identifications_current,
+    identification_created_at = identifications_created_at
+  ) |>
+  mutate(
+    identification_occurrence = case_when(
+      as.Date(identification_created_at) <= as.Date("2026-07-23") ~ "before",
+      TRUE ~ "after"
+    )
+  )
+```
+
+
+```{r}
+#| label: og-obs-ann-table
+og_obs_ann <- og_obs_base |>
+  select(observation_id, annotations) |>
+  unnest_longer(annotations) |>
+  unpack(annotations, names_sep = "_") |>
+  select(
+    observation_id,
+    annotation_uuid = annotations_uuid,
+    annotation_attr_id = annotations_controlled_attribute_id,
+    annotation_value_id = annotations_controlled_value_id,
+    annotator_id = annotations_user_id,
+    annotator_login = annotations_user.login
+  )
+```
+
+
+```{r}
+#| label: og-obs-com-table
+og_obs_com <- og_obs_base |>
+  select(observation_id, comments) |>
+  unnest_longer(comments) |>
+  unpack(comments, names_sep = "_") |>
+  select(
+    observation_id,
+    comment_id = comments_id,
+    commenter_id = comments_user.id,
+    comment_created_at = comments_created_at,
+    comment_body = comments_body
+  ) |>
+  mutate(
+    comment_occurrence = case_when(
+      as.Date(comment_created_at) <= as.Date("2026-07-23") ~ "before",
+      TRUE ~ "after"
+    )
+  )
+```
+
+## Updated observations
+
+```{r}
+#| label: read-upd-obs
+# updated observations
+upd_obs <- readRDS(here(L3_data_dir, "302_updated_obs.rds")) |>
+  rename(observation_id = id)
+```
+
+```{r}
+#| label: FX-parse-json
+safe_parse <- function(x) {
+  map(
+    x,
+    ~ if (is.na(.x) || .x == "" || is.null(.x)) {
+      list()
+    } else {
+      fromJSON(.x, simplifyDataFrame = TRUE)
+    }
+  )
+}
+```
+
+```{r}
+#| label: parse-upd-obs
+parsed_upd_obs <- upd_obs |>
+  mutate(
+    taxon = if (is.character(taxon)) safe_parse(taxon) else taxon,
+    user = if (is.character(user)) safe_parse(user) else user,
+    identifications = if (is.character(identifications)) {
+      safe_parse(identifications)
+    } else {
+      identifications
+    },
+    comments = if (is.character(comments)) safe_parse(comments) else comments,
+    annotations = if (is.character(annotations)) {
+      safe_parse(annotations)
+    } else {
+      annotations
+    }
+  )
+
+
+upd_obs_base <- parsed_upd_obs |>
+  # taxon information
+  hoist(
+    taxon,
+    taxon_name = "name",
+    taxon_id = "id",
+    taxon_ancestry = "min_species_ancestry",
+    taxon_species_id = "min_species_taxon_id",
+    taxon_rank_level = "rank_level",
+    taxon_rank = "rank"
+  ) |>
+  # observer information
+  hoist(
+    user,
+    observer_id = "id",
+    observer_login = "login",
+    observer_obs_cnt = "observations_count",
+    observer_ids_cnt = "identifications_count",
+    observer_spp_cnt = "species_count"
+  ) |>
+  select(
+    ## observation info
+    observation_id,
+    quality_grade,
+    ### community taxon
+    starts_with("taxon_"),
+    ### observer info
+    starts_with("observer_"),
+    ### summary info (ids, com)
+    identifications_count,
+    num_identification_agreements,
+    num_identification_disagreements,
+    identification_disagreements_count,
+    identifications_some_agree,
+    comments_count,
+    ### dataframes of ids, ann, com
+    identifications,
+    comments,
+    annotations
+  )
+```
+
+
+### Updated subtables of identifications, annotations, comments
+
+```{r}
+#| label: FX-extract-user-fields
+pull_user_field <- function(user_col, field = "id") {
+  if (is.null(user_col)) {
+    return(character(0))
+  }
+  if (is.data.frame(user_col)) {
+    as.character(user_col[[field]] %||% NA_character_)
+  } else if (is.list(user_col)) {
+    map_chr(user_col, ~ as.character(.x[[field]] %||% NA_character_))
+  } else {
+    as.character(user_col)
+  }
+}
+```
+
+```{r}
+#| label: FX-flatten-body-text
+pull_clean_body <- function(body_col, n_rows) {
+  if (is.null(body_col) || is.data.frame(body_col)) {
+    rep(NA_character_, n_rows)
+  } else if (is.list(body_col)) {
+    map_chr(
+      body_col,
+      ~ if (length(.x) == 0 || is.null(.x)) {
+        NA_character_
+      } else {
+        as.character(.x[[1]])
+      }
+    )
+  } else {
+    as.character(body_col)
+  }
+}
+```
+
+```{r}
+#| label: FX-guard-empty-elements
+is_empty_entry <- function(x) {
+  is.null(x) || length(x) == 0 || (is.data.frame(x) && nrow(x) == 0)
+}
+```
+
+```{r}
+#| label: upd-obs-ids-table
+upd_obs_ids <- flat_obs |> #upd_obs_base |>
+  select(observation_id, identifications) |>
+  mutate(
+    identifications = map(identifications, function(df) {
+      if (is_empty_entry(df)) {
+        return(tibble())
+      }
+
+      # Force to df if not already
+      df <- as_tibble(df)
+
+      # Assemble desired columns
+      tibble(
+        identification_id = as.integer(df[["id"]]),
+        identifier_comment = pull_clean_body(df[["body"]], nrow(df)),
+        identification_vision = as.logical(df[["vision"]] %||% NA),
+        identification_own = as.logical(df[["own_observation"]] %||% NA),
+        identifier_id = as.integer(pull_user_field(df[["user"]], "id")),
+        identifier_login = pull_user_field(df[["user"]], "login"),
+        identification_taxon_id = as.integer(df[["taxon_id"]] %||% NA),
+        identification_current = as.logical(df[["current"]] %||% NA),
+        identification_created_at = as.character(df[["created_at"]] %||% NA)
+      )
+    })
+  ) |>
+  unnest(identifications) |>
+  mutate(
+    identification_occurrence = case_when(
+      as.Date(identification_created_at) <= as.Date("2026-07-23") ~ "before",
+      TRUE ~ "after"
+    )
+  )
+```
+
+```{r}
+#| label: upd-obs-ann-table
+upd_obs_ann <- flat_obs |> #upd_obs_base |>
+  select(observation_id, annotations) |>
+  mutate(
+    annotations = map(annotations, function(df) {
+      if (is_empty_entry(df)) {
+        return(tibble())
+      }
+
+      # Force to df if not already
+      df <- as_tibble(df)
+
+      # Assemble desired columns
+      tibble(
+        annotation_uuid = as.character(df[["uuid"]] %||% NA),
+        annotation_attr_id = as.integer(
+          df[["controlled_attribute_id"]] %||% NA
+        ),
+        annotation_value_id = as.integer(df[["controlled_value_id"]] %||% NA),
+        annotator_id = as.integer(pull_user_field(df[["user"]], "id")),
+        annotator_login = pull_user_field(df[["user"]], "login")
+      )
+    })
+  ) |>
+  unnest(annotations)
+```
+
+
+```{r}
+#| label: upd-obs-com-table
+upd_obs_com <- flat_obs |> #upd_obs_base |>
+  select(observation_id, comments) |>
+  mutate(
+    comments = map(comments, function(df) {
+      if (is_empty_entry(df)) {
+        return(tibble())
+      }
+
+      # Force to df if not already
+      df <- as_tibble(df)
+
+      # Assemble desired columns
+      tibble(
+        comment_id = as.integer(df[["id"]]),
+        commenter_id = as.integer(pull_user_field(df[["user"]], "id")),
+        comment_created_at = as.character(df[["created_at"]] %||% NA),
+        comment_body = pull_clean_body(df[["body"]], nrow(df))
+      )
+    })
+  ) |>
+  unnest(comments) |>
+  mutate(
+    comment_occurrence = case_when(
+      as.Date(comment_created_at) <= as.Date("2026-07-23") ~ "before",
+      TRUE ~ "after"
+    )
+  )
+```
+
+
+# Explore data
+
+script logic
+
+* for original obs:
+  * get info for IDs, comments, including user info
+* for updated obs:
+  * get info for IDs, comments, icnluding user info
+* then join this info together by observation ID
+* use craeted_at to distinguish between (before/after) adding my ID
+
+for annotations, just compare # before and after because I can't check crated_at
+
+explore chagen in taxonomic resolutoin
+
+
+focus on the change in taxonomic level after I add my ID
+that is, the consensus is still correct at the order-level!!!
+
+```{r}
+before <- og_obs_base |> count(taxon_rank)
+after <- flat_obs |> count(taxon_rank)
+
+before <- og_obs_base |>
+  select(identifications_count, observation_id) |>
+  mutate(
+    observation_id = as.integer(observation_id),
+    identifications_count = as.integer(identifications_count)
+  )
+
+after <- flat_obs |>
+  select(identifications_count, observation_id) |>
+  mutate(
+    observation_id = as.integer(observation_id),
+    identifications_count = as.integer(identifications_count)
+  )
+
+both <- full_join(
+  before,
+  after,
+  by = "observation_id",
+  suffix = c("_before", "_after")
+) |>
+  mutate(
+    changed_obs = case_when(
+      identifications_count_before != identifications_count_after ~ "changed",
+      TRUE ~ NA_character_
+    )
+  )
+
+ggplot2::ggplot(both, aes())
+
+both |>
+  filter(identifications_count_before != identifications_count_after) |>
+  mutate(
+    net_ids = identifications_count_after - identifications_count_before
+  ) |>
+  count(net_ids) |>
+  mutate(
+    highlight = if_else(
+      net_ids > 1,
+      "Catalyzed downstream IDs (> +1)",
+      "Only your ID (+1)"
+    )
+  ) |>
+  ggplot(aes(x = factor(net_ids), y = n, fill = highlight)) +
+  geom_col(width = 0.65, show.legend = TRUE) +
+  geom_text(
+    aes(label = scales::comma(n)),
+    vjust = -0.4,
+    size = 3.8,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(
+    labels = scales::comma,
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Only your ID (+1)" = "#4E79A7",
+      "Catalyzed downstream IDs (> +1)" = "#E15759"
+    )
+  ) +
+  labs(
+    title = "Distribution of Net Identifications Gained",
+    subtitle = "Observations that experienced changes between snapshots",
+    x = "Net Identifications Added",
+    y = "Number of Observations",
+    fill = "Impact Type"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank()
+  )
+
+both <- bind_rows(
+  before = before,
+  after = after,
+  .id = "snapshot"
+)
+
+ggplot2::ggplot(both, aes(x = taxon_rank, y = n, fill = snapshot)) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  coord_flip()
+```

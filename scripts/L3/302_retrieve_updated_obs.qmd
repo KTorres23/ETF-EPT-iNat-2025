@@ -1,0 +1,195 @@
+---
+title: 302_retrieve_updated_obs.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script retrieves observation information for aquatic insect taxon from the iNaturalist API
+date: 2026-09-01 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+This grabs data
+
+Last data pull initated on 9/1/2026
+
+# Set up environment
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(httr, jsonlite, tidyverse, here, data.table)
+
+# Clear envionrment
+rm(list = ls())
+
+# Set working directory
+here::i_am("scripts/L3/302_retrieve_updated_obs.qmd")
+
+# Point to directories
+L3_data_dir <- here("data", "L3") # L3 data
+L301_data_dir <- here(L3_data_dir, "301_api_uploads")
+```
+
+# Read data to retrieve
+
+```{r}
+#| label: read-data
+obs_to_retrieve <- readRDS(here(
+  L301_data_dir,
+  "301b_ETF_EPT_IDS_api_uploads.rds"
+)) |>
+  filter(posted_to_inat == TRUE)
+
+target_ids <- unique(na.omit(obs_to_retrieve$observation_id))
+```
+
+# Establish API parameters
+
+```{r}
+#| label: est-api-param
+# base API url
+API_URL <- "https://api.inaturalist.org/v1/observations"
+PER_PAGE <- 200 # Max records per request (API maximum)
+USER_NAME <- "iNat user: kmtorres" # allows iNat to reach out about API traffic concerns
+
+id_chunks <- split(target_ids, ceiling(seq_along(target_ids) / PER_PAGE))
+total_batches <- length(id_chunks)
+```
+
+# Retrieve data from API
+
+## Check existing data
+
+Observation data was pulled between November 3rd and 4th 2025 for EPT taxa.
+However, the study period is from 2000-2025, so additional data needs to be
+pulled to complete the period.
+
+
+## Retrieve new data
+
+```{r}
+#| label: retrieve-api-data
+# Directory to save raw chunks safely
+cache_dir <- file.path(tempdir(), "inat_batches")
+if (!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+batch_list <- vector("list", length = total_batches)
+
+cat(sprintf(
+  "Starting download for %d observations across %d batches...\n\n",
+  length(target_ids),
+  total_batches
+))
+# 2. Retrieve data in batches
+for (i in seq_along(id_chunks)) {
+  current_ids <- id_chunks[[i]]
+  id_param <- paste(current_ids, collapse = ",")
+
+  params <- list(
+    id = id_param,
+    per_page = PER_PAGE
+  )
+
+  response <- GET(API_URL, query = params, user_agent(USER_NAME))
+
+  if (http_error(response)) {
+    warning(sprintf(
+      "HTTP Error on batch %d/%d: %s",
+      i,
+      total_batches,
+      http_status(response)$message
+    ))
+    Sys.sleep(2)
+    next
+  }
+
+  raw_text <- content(response, "text", encoding = "UTF-8")
+  parsed <- fromJSON(raw_text, simplifyVector = FALSE)
+
+  if (!is.null(parsed$results) && length(parsed$results) > 0) {
+    # Clean every row into a named list with 100% consistent character types
+    rows_cleaned <- lapply(parsed$results, function(obs) {
+      lapply(obs, function(val) {
+        if (is.null(val) || length(val) == 0) {
+          return(NA_character_)
+        }
+        if (is.list(val) || length(val) > 1) {
+          return(as.character(toJSON(val, auto_unbox = TRUE)))
+        }
+        return(as.character(val))
+      })
+    })
+
+    # Fast, crash-proof bind per batch
+    batch_list[[i]] <- rbindlist(rows_cleaned, fill = TRUE, use.names = TRUE)
+
+    cat(sprintf(
+      "Batch %d/%d: Retrieved %d records.\n",
+      i,
+      total_batches,
+      length(rows_cleaned)
+    ))
+  } else {
+    cat(sprintf("Batch %d/%d: No records returned.\n", i, total_batches))
+  }
+
+  Sys.sleep(1.2)
+}
+
+# 3. Combine all batches into the final data frame
+final_obs_df <- as.data.frame(rbindlist(
+  batch_list,
+  fill = TRUE,
+  use.names = TRUE
+))
+
+cat(sprintf(
+  "\nComplete! Successfully retrieved %d observations across %d fields without errors.\n",
+  nrow(final_obs_df),
+  ncol(final_obs_df)
+))
+```
+
+
+```{r}
+# Example: parse the nested photos JSON for a specific observation
+#first_obs_photos <- jsonlite::fromJSON(final_obs_df$photos[1])
+```
+
+# Save data and file
+
+> [!IMPORTANT]
+> This will write over the existing files by joining the existing data with new data if the API found new observation records
+
+```{r}
+#| label: export-data
+saveRDS(final_obs_df, here(L3_data_dir, "302_updated_obs.rds"))
+write_csv(final_obs_df, here(L3_data_dir, "302_updated_obs.csv"))
+```
+
+
+```{r}
+extracted_obs <- unique(final_obs_df$id)
+
+all_obs <- unique(obs_to_retrieve$observation_id)
+
+missing_obs <- setdiff(all_obs, extracted_obs)
+
+# Check how many are missing
+cat(sprintf(
+  "Missing observations: %d out of %d\n",
+  length(missing_obs),
+  length(all_obs)
+))
+```

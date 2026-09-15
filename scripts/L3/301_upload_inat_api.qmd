@@ -1,5 +1,5 @@
 ---
-title: 307_upload_inat_api.qmd
+title: 301_upload_inat_api.qmd
 author: 
     - name: Karina Torres
       role: Author
@@ -10,7 +10,7 @@ format:
   html:
     embed-resources: true
 abstract: This script prepares a dataset of IDs and annotations to add to iNaturalist.
-date: 2026-07-17 # last modified
+date: 2026-09-13 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -44,18 +44,18 @@ SLEEP_RATE <- 8.75 # 8.75-second sleep time to avoid hitting daily API limits
 if (!require("pacman")) {
   install.packages("pacman")
 }
-pacman::p_load(tidyverse, here, httr, jsonlite)
+pacman::p_load(tidyverse, here, httr, jsonlite, fs)
 
 # Set working directory
-here::i_am("ch1_eco_subobj_01/scripts/L3/307_upload_inat_api.qmd")
+here::i_am("scripts/L3/301_upload_inat_api.qmd")
 
 # Point to directories
-subobj_dir <- "ch1_eco_subobj_01" # subobjectives
-L0_data_dir <- here(subobj_dir, "data", "L0") # L0 data
-L1_data_dir <- here(subobj_dir, "data", "L1") # L1 data
-L2_data_dir <- here(subobj_dir, "data", "L2") # L2 data
-L3_data_dir <- here(subobj_dir, "data", "L3") # L3 data
-L307_data_dir <- here(L3_data_dir, "307_api_uploads")
+L0_data_dir <- here("data", "L0") # L0 data
+L1_data_dir <- here("data", "L1") # L1 data
+L2_data_dir <- here("data", "L2") # L2 data
+L3_data_dir <- here("data", "L3") # L3 data
+L301_data_dir <- here(L3_data_dir, "301_api_uploads")
+fs::dir_create(L301_data_dir)
 ```
 
 
@@ -64,34 +64,34 @@ L307_data_dir <- here(L3_data_dir, "307_api_uploads")
 ```{r}
 #| label: read-inat-ept-data
 # Read in EPT data from iNaturalist
-EUSA_EPT_inat_df <- readRDS(here(
+ETF_EPT_inat_df <- readRDS(here(
   L2_data_dir,
-  "207a_EUSA_EPT_final_annotated.rds"
+  "103a_ETF_EPT_final_annotated.rds"
 )) |>
   left_join(
-    read_csv(here(L2_data_dir, "201a_clean_EUSA_EPT_obs.csv")),
+    read_csv(here(L2_data_dir, "004_clean_ETF_EPT_obs.csv")),
     join_by("observation_id" == "id")
   )
 
 # Join iNat metadata to study observations
-EUSA_EPT_metadata_df <- EUSA_EPT_inat_df |>
+ETF_EPT_metadata_df <- ETF_EPT_inat_df |>
   select(species, life_stage, observation_id, evidence_type) |>
   left_join(
     # Read in iNat metadata
     read_rds(here(
       L2_data_dir,
-      "202a_images_clean_EUSA_EPT_obs.rds"
+      "101a_images_clean_ETF_EPT_obs.rds"
     )),
     join_by(observation_id == id)
   )
 
-table(EUSA_EPT_inat_df$species, EUSA_EPT_inat_df$life_stage)
+table(ETF_EPT_inat_df$species, ETF_EPT_inat_df$life_stage)
 ```
 
 
 ```{r}
 #| label: read-sample-data
-# EUSA_EPT_inat_df <- read_csv(here(L307_data_dir, "EPT_sample_data_2026.csv")) |>
+# ETF_EPT_inat_df <- read_csv(here(L301_data_dir, "EPT_sample_data_2026.csv")) |>
 #   slice(6:10) |>
 #   mutate(species = "Ephemeroptera", observation_id = id) |>
 #   mutate(
@@ -118,7 +118,8 @@ post_inat_id <- function(row_data, token, log_file) {
     identification = list(
       observation_id = obs_id,
       taxon_id = taxon_id,
-      current = TRUE
+      current = TRUE,
+      body = "Supporting Order-level ID (not disagreeing with finer IDs)"
     )
   )
 
@@ -164,6 +165,11 @@ post_inat_id <- function(row_data, token, log_file) {
       error_msg
     )
     warning(log_msg)
+
+    # If observation doesn't exist/deleted, mark as TRUE so future loops skip it
+    if (str_detect(error_msg, "Observation can't be blank")) {
+      row_data$posted_to_inat <- TRUE
+    }
   }
 
   # Append log entry to file
@@ -177,7 +183,7 @@ post_inat_id <- function(row_data, token, log_file) {
 
 ```{r}
 #| label: prep-id-dataset
-final_ids_to_post <- EUSA_EPT_inat_df |>
+final_ids_to_post <- ETF_EPT_inat_df |>
   mutate(
     posted_to_inat = FALSE,
     taxon_id = case_when(
@@ -193,17 +199,16 @@ final_ids_to_post <- EUSA_EPT_inat_df |>
 
 ```{r}
 #| label: save-id-dataset
-
 # Empty dataset
 saveRDS(
   final_ids_to_post,
-  here(L307_data_dir, "307a_EUSA_EPT_IDS_api_prep.rds")
+  here(L301_data_dir, "301a_ETF_EPT_IDS_api_prep.rds")
 )
 
 # Dataset for upload tracking
 saveRDS(
   final_ids_to_post,
-  here(L307_data_dir, "307b_EUSA_EPT_IDS_api_uploads.rds")
+  here(L301_data_dir, "301b_ETF_EPT_IDS_api_uploads.rds")
 )
 
 rm(final_ids_to_post)
@@ -213,11 +218,71 @@ rm(final_ids_to_post)
 
 ```{r}
 #| label: upload-inat-ids
+# # Read in unposted observations in the up-to-date dataset
+# final_ids_to_post_master <- readRDS(here(
+#   L301_data_dir,
+#   "301b_ETF_EPT_IDS_api_uploads.rds"
+# ))
 
+# unposted_ids <- final_ids_to_post_master |>
+#   filter(posted_to_inat == FALSE)
+
+# # Grabs first batch number available
+# current_batch_num <- min(unposted_ids$batch_id, na.rm = TRUE)
+
+# # Filter to today's uploads
+# ids_for_today <- unposted_ids |>
+#   filter(batch_id == current_batch_num)
+
+# # Log start
+# identification_log <- here(L301_data_dir, "301c_ETF_EPT_IDS_api_log.txt")
+
+# start_msg <- paste0(
+#   Sys.time(),
+#   " | Executing upload for Batch ID: ",
+#   current_batch_num
+# )
+
+# message(start_msg)
+# write(start_msg, file = identification_log, append = TRUE)
+
+# # Run the ID loop
+# updated_ids <- split(ids_for_today, seq_len(nrow(ids_for_today))) |>
+#   map_dfr(
+#     ~ post_inat_id(
+#       .x,
+#       token = Sys.getenv("INAT_TOKEN"),
+#       log_file = identification_log
+#     )
+#   )
+
+# # Add today's progress back to main dataset:
+# reconciled_master <- final_ids_to_post_master |>
+#   rows_update(updated_ids, by = "observation_id")
+
+# saveRDS(
+#   reconciled_master,
+#   here(L301_data_dir, "301b_ETF_EPT_IDS_api_uploads.rds")
+# )
+
+# # Log end
+# end_msg <- paste0(
+#   Sys.time(),
+#   " | Master RDS saved successfully for Batch ID: ",
+#   current_batch_num
+# )
+
+# message(end_msg)
+# write(end_msg, file = identification_log, append = TRUE)
+```
+
+
+```{r}
+#| label: new-upload-inat-ids
 # Read in unposted observations in the up-to-date dataset
 final_ids_to_post_master <- readRDS(here(
-  L307_data_dir,
-  "307b_EUSA_EPT_IDS_api_uploads.rds"
+  L301_data_dir,
+  "301b_ETF_EPT_IDS_api_uploads.rds"
 ))
 
 unposted_ids <- final_ids_to_post_master |>
@@ -231,7 +296,7 @@ ids_for_today <- unposted_ids |>
   filter(batch_id == current_batch_num)
 
 # Log start
-identification_log <- here(L307_data_dir, "307c_EUSA_EPT_IDS_api_log.txt")
+identification_log <- here(L301_data_dir, "301c_ETF_EPT_IDS_api_log.txt")
 
 start_msg <- paste0(
   Sys.time(),
@@ -243,39 +308,53 @@ message(start_msg)
 write(start_msg, file = identification_log, append = TRUE)
 
 
-# Run the ID loop
-updated_ids <- split(ids_for_today, seq_len(nrow(ids_for_today))) |>
-  map_dfr(
-    ~ post_inat_id(
-      .x,
-      token = Sys.getenv("INAT_TOKEN"),
-      log_file = identification_log
-    )
+# ==============================================================================
+# REPLACED LOOP: Incremental saving loop (Saves progress every 100 iterations)
+# ==============================================================================
+
+updated_rows <- list()
+
+for (i in seq_len(nrow(ids_for_today))) {
+  row_result <- post_inat_id(
+    ids_for_today[i, ],
+    token = Sys.getenv("INAT_TOKEN"),
+    log_file = identification_log
   )
 
-# Add today's progress back to main dataset:
-reconciled_master <- final_ids_to_post_master |>
-  rows_update(updated_ids, by = "observation_id")
+  updated_rows[[i]] <- row_result
 
-saveRDS(
-  reconciled_master,
-  here(L307_data_dir, "307b_EUSA_EPT_IDS_api_uploads.rds")
-)
+  # Checkpoint save to disk every 100 uploads OR on the very last row
+  if (i %% 100 == 0 || i == nrow(ids_for_today)) {
+    checkpoint_df <- bind_rows(updated_rows)
+
+    # Safely merge checkpoint back into the master dataset in memory
+    final_ids_to_post_master <- final_ids_to_post_master |>
+      rows_update(checkpoint_df, by = c("species", "observation_id"))
+
+    # Overwrite the saved RDS file with incremental progress
+    saveRDS(
+      final_ids_to_post_master,
+      here(L301_data_dir, "301b_ETF_EPT_IDS_api_uploads.rds")
+    )
+  }
+}
 
 # Log end
 end_msg <- paste0(
   Sys.time(),
-  " | Master RDS saved successfully for Batch ID: ",
-  current_batch_num
+  " | Batch ID ",
+  current_batch_num,
+  " complete! Master RDS updated."
 )
 
 message(end_msg)
 write(end_msg, file = identification_log, append = TRUE)
 ```
 
+
+
 ```{r}
 #| label: clean-up-env
-
 rm(
   final_ids_to_post_master,
   unposted_ids,
@@ -289,6 +368,76 @@ rm(
 )
 ```
 
+
+## Check IDs
+
+Recover IDs not added to main dataset if error occurs
+
+```{r}
+#| label: recover-ids
+# 1. Read log lines
+log_lines <- readLines(here(L301_data_dir, "301c_ETF_EPT_IDS_api_log.txt"))
+
+# 2. Filter for success lines and extract the observation numbers
+# Matches lines like: "... | Added ID (Taxon: 48011) to observation # 12345678"
+successful_obs_ids <- log_lines |>
+  keep(~ str_detect(.x, "Added ID")) |>
+  str_extract("observation # \\d+") |>
+  str_remove("observation # ") |>
+  as.numeric()
+
+# 3. Read your existing master tracking dataset
+final_ids_to_post_master <- readRDS(here(
+  L301_data_dir,
+  "301b_ETF_EPT_IDS_api_uploads.rds"
+))
+
+# 4. Mark posted_to_inat as TRUE for all successfully logged observation IDs
+reconciled_ids_master <- final_ids_to_post_master |>
+  mutate(
+    posted_to_inat = if_else(
+      observation_id %in% successful_obs_ids,
+      TRUE,
+      posted_to_inat
+    )
+  )
+
+# Verify how many were updated
+cat(
+  "Total successfully posted according to log:",
+  length(successful_obs_ids),
+  "\n"
+)
+cat(
+  "Total rows marked TRUE in dataset:",
+  sum(reconciled_ids_master$posted_to_inat),
+  "\n"
+)
+
+# 5. Overwrite the saved RDS file with the updated status
+saveRDS(
+  reconciled_ids_master,
+  here(L301_data_dir, "301b_ETF_EPT_IDS_api_uploads.rds")
+)
+```
+
+## Inspect failed ID uploads
+
+Inspect IDs from log file that failed to upload to iNaturalist 
+Observations that are no longer on iNat get automatically upadted to "posted to iNat" true flag!!
+
+```{r}
+#| label: inspect-ids
+failed_obs_ids <- log_lines |>
+  keep(~ str_detect(.x, "Failed to add ID")) |>
+  str_extract("observation # \\d+") |>
+  str_remove("observation # ") |>
+  as.numeric()
+
+# Inspect the problematic rows
+reconciled_ids_master |>
+  filter(observation_id %in% failed_obs_ids)
+```
 
 # Annotations
 
@@ -409,7 +558,7 @@ post_inat_annotation <- function(row_data, token, log_file) {
 # Curate datasets to add annotations back to iNat
 
 #Ephemeroptera
-ephemeroptera_df <- EUSA_EPT_metadata_df |>
+ephemeroptera_df <- ETF_EPT_metadata_df |>
   filter(species == "Ephemeroptera") |>
   select(
     species,
@@ -456,7 +605,7 @@ ephemeroptera_df <- EUSA_EPT_metadata_df |>
 
 
 # Plecoptera
-plecoptera_df <- EUSA_EPT_metadata_df |>
+plecoptera_df <- ETF_EPT_metadata_df |>
   filter(species == "Plecoptera") |>
   select(
     species,
@@ -500,7 +649,7 @@ plecoptera_df <- EUSA_EPT_metadata_df |>
   select(-attribute_type)
 
 # Trichoptera
-trichoptera_df <- EUSA_EPT_metadata_df |>
+trichoptera_df <- ETF_EPT_metadata_df |>
   filter(species == "Trichoptera") |>
   select(
     species,
@@ -559,17 +708,16 @@ rm(ephemeroptera_df, plecoptera_df, trichoptera_df)
 
 ```{r}
 #| label: save-ann-dataset
-
 # Empty dataset
 saveRDS(
   final_ann_to_post,
-  here(L307_data_dir, "307d_EUSA_EPT_ANN_api_prep.rds")
+  here(L301_data_dir, "301d_ETF_EPT_ANN_api_prep.rds")
 )
 
 # Dataset for upload tracking
 saveRDS(
   final_ann_to_post,
-  here(L307_data_dir, "307e_EUSA_EPT_ANN_api_uploads.rds")
+  here(L301_data_dir, "301e_ETF_EPT_ANN_api_uploads.rds")
 )
 
 rm(final_ann_to_post)
@@ -579,11 +727,10 @@ rm(final_ann_to_post)
 
 ```{r}
 #| label: upload-inat-ann
-
 # Read in unposted observations in the up-to-date dataset
 final_ann_to_post_master <- readRDS(here(
-  L307_data_dir,
-  "307e_EUSA_EPT_ANN_api_uploads.rds"
+  L301_data_dir,
+  "301e_ETF_EPT_ANN_api_uploads.rds"
 ))
 
 unposted_ann <- final_ann_to_post_master |>
@@ -598,7 +745,7 @@ ann_for_today <- unposted_ann |>
 
 
 # Log start
-annotation_log <- here(L307_data_dir, "307f_EUSA_EPT_ANN_api_log.txt")
+annotation_log <- here(L301_data_dir, "301f_ETF_EPT_ANN_api_log.txt")
 
 start_msg <- paste0(
   Sys.time(),
@@ -629,7 +776,7 @@ reconciled_master <- final_ann_to_post_master |>
 
 saveRDS(
   reconciled_master,
-  here(L307_data_dir, "307e_EUSA_EPT_ANN_api_uploads.rds")
+  here(L301_data_dir, "301e_ETF_EPT_ANN_api_uploads.rds")
 )
 
 # Log end
@@ -646,7 +793,6 @@ write(end_msg, file = annotation_log, append = TRUE)
 
 ```{r}
 #| label: clean-up-env
-
 rm(
   final_ann_to_post_master,
   unposted_ann,
@@ -740,8 +886,7 @@ post_obs_to_project <- function(row_data, token, log_file, project_id) {
 
 ```{r}
 #| label: curate-obs-dataset
-
-final_proj_to_post <- EUSA_EPT_inat_df |>
+final_proj_to_post <- ETF_EPT_inat_df |>
   mutate(
     posted_to_inat = FALSE,
     taxon_id = case_when(
@@ -768,17 +913,16 @@ final_proj_to_post <- EUSA_EPT_inat_df |>
 
 ```{r}
 #| label: save-proj-dataset
-
 # Empty dataset
 saveRDS(
   final_proj_to_post,
-  here(L307_data_dir, "307g_EUSA_EPT_project_api_prep.rds")
+  here(L301_data_dir, "301g_ETF_EPT_project_api_prep.rds")
 )
 
 # Dataset for upload tracking
 saveRDS(
   final_proj_to_post,
-  here(L307_data_dir, "307h_EUSA_EPT_project_api_uploads.rds")
+  here(L301_data_dir, "301h_ETF_EPT_project_api_uploads.rds")
 )
 
 rm(final_proj_to_post)
@@ -788,11 +932,10 @@ rm(final_proj_to_post)
 
 ```{r}
 #| label: upload-inat-proj
-
 # Read in unposted observations in the up-to-date dataset
 final_proj_to_post_master <- readRDS(here(
-  L307_data_dir,
-  "307h_EUSA_EPT_project_api_uploads.rds"
+  L301_data_dir,
+  "301h_ETF_EPT_project_api_uploads.rds"
 ))
 
 unposted_proj <- final_proj_to_post_master |>
@@ -808,7 +951,7 @@ proj_for_today <- unposted_proj |>
 
 # Log start
 project_id <- 300755
-project_log <- here(L307_data_dir, "307i_EUSA_EPT_project_api_log.txt")
+project_log <- here(L301_data_dir, "301i_ETF_EPT_project_api_log.txt")
 
 start_msg <- paste0(
   Sys.time(),
@@ -840,7 +983,7 @@ reconciled_master <- final_proj_to_post_master |>
 
 saveRDS(
   reconciled_master,
-  here(L307_data_dir, "307h_EUSA_EPT_project_api_uploads.rds")
+  here(L301_data_dir, "301h_ETF_EPT_project_api_uploads.rds")
 )
 
 # Log end
@@ -856,7 +999,6 @@ write(end_msg, file = project_log, append = TRUE)
 
 ```{r}
 #| label: clean-up-env
-
 rm(
   final_proj_to_post_master,
   unposted_proj,
@@ -876,7 +1018,6 @@ rm(
 
 ```{r}
 #| label: compile-list
-
 # Compile list of batches to complete
 batches_list <- bind_rows(
   "identifications" = final_ids_to_post |> select(batch_id),
@@ -891,11 +1032,11 @@ print(batches_list, n = 30)
 
 ```{r}
 #| label: other
-h <- EUSA_EPT_metadata_df |>
+h <- ETF_EPT_metadata_df |>
   filter(life_stage == "nymph/larvae") |>
   select(annotations)
 
-a <- EUSA_EPT_metadata_df |>
+a <- ETF_EPT_metadata_df |>
   filter(life_stage == "adult") |>
   select(annotations)
 
