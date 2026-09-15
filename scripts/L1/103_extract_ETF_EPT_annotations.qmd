@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script curates labels annotated from the previous script.
-date: 2026-09-12 # last modified
+date: 2026-09-15 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
