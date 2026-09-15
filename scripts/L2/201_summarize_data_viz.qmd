@@ -15,33 +15,6 @@ date: 2026-09-12 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
-
-
-# Results to write
-
-`{XTABLE}` - table of # of obs per taxa (EPT, IPP), per dataset (GBIF/iNat), per life stage (A/J) & combined
-
-**raw inat data pull**
-
-From the iNaturalist API, I pulled `{1XXX}` unique observations of Ephemeroptera, Plecoptera, and Trichoptera taken from Jan 2000 to Dec 2025, retaining only `{2XXX}` within the North America L1 ecoregion of the Eastern Temperate Forest. Because most of the covariate data is for the United States, I restricted the study extent to only the United States portion of the Eastern Temperate Forests in later filters. After adding quality control filters (e.g., positional accuracy, public licensing, temporal data) and during the image annotation process where I investigated further quality checks (e.g., duplicate images, observations unidentifiable to the order level), I retained a total of `{3XXX}` observations for all subsequent analyses (`{XTABLE}`). 
-
-*use sankey diagram??*
-1. pull taxon IDs from `raw_EPT`, get # of obs per taxa
-2. pull taxon IDs from `raw_ETF_EPT`, get # of obs per taxa
-3. from `final_ETF_EPT`, grab # of obs per taxa, per life stage
-
-**clean inat data summary - order-level for SO1/2**
-
-Of the iNaturalist observations included in the analyses, I found `{%%%%}` observations were not research grade, `{%%%}` had no annotations, and `{%%%}` only had one identification. There were `{XXX}` observers and `{XXX}` identifiers (supplementary methods acknowledging their contributions). The data in our ETF study extent represents `{%%%}` of all global EPT observations. From my annotations, I found `{%%%}` immature and `{%%%}` adult observations
-
-*from `final_ETF_EPT`*
-* SUNBURST CHART: get # of obs Research grade vs Needs ID ( by taxa! - make table of all #s and %s- combined & by taxa/life stage)
-* add to sunburst chart? get # of obs w/& w/o annotations  (by taxa! make table combined)
-* BAR: get # of IDs per observation (by taxa! make table combined)
-* BAR: get # of identifiers & observers (by taxa! make table combined)
-* MAP: show distrib. data across ETF (by taxa)
-
-
 # Set up environment
 
 ```{r}
@@ -152,7 +125,10 @@ raw_ETF_EPT <- read_csv(here(L0_data_dir, "002a_raw_EPT_obs.csv")) |>
   distinct(id, .keep_all = TRUE) # Remove dupes
 
 # --- Cleaned observation data (script L004)
-# clean_ETF_EPT <- read_csv(here(L0_data_dir, "004_clean_ETF_EPT_obs.rds"))
+clean_ETF_EPT <- read_csv(here(L0_data_dir, "004_clean_ETF_EPT_obs.csv")) |>
+  select(id, taxon.name) |>
+  left_join(raw_ETF_EPT, by = c("id", "taxon.name")) |> # Only keep EPT obs in the ETF
+  distinct(id, .keep_all = TRUE) # Remove dupes
 
 # --- Final observation data
 # Final observation data after removing image dupes, missing pics, cant ID observations, etc.
@@ -171,7 +147,7 @@ final_ETF_EPT <- readRDS(here(
 rm(raw_ETF_EPT_sf, raw_ETF_EPT_df)
 ```
 
-## species totals
+## species totals Table
 
 ```{r}
 #| label: get-num-spp-raw
@@ -228,6 +204,28 @@ raw_ETF_EPT_totals <- raw_ETF_EPT |>
 
 
 ```{r}
+#| label: get-num-spp-clean-ETF
+clean_ETF_EPT_totals <- clean_ETF_EPT |>
+  # Grab species label
+  mutate(
+    species = case_when(
+      str_to_lower(taxon.name) == EPT[1] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[1])) ~ EPT[1],
+      str_to_lower(taxon.name) == EPT[2] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[2])) ~ EPT[2],
+      str_to_lower(taxon.name) == EPT[3] |
+        str_detect(taxon.ancestry, MakePattern(EPT_id[3])) ~ EPT[3],
+      .default = NA_character_
+    )
+  ) |>
+  group_by(species) |>
+  # Summarize # obs, plec, tric
+  summarize(num_obs_spp = n()) |>
+  ungroup() |>
+  mutate(total_obs = sum(num_obs_spp), dataset = "Clean ETF EPT")
+```
+
+```{r}
 #| label: get-num-spp-final-ETF
 final_ETF_EPT_totals <- final_ETF_EPT |>
   group_by(species, life_stage) |>
@@ -243,7 +241,7 @@ final_ETF_EPT_totals <- final_ETF_EPT |>
 
 
 ```{r}
-#| label: create-spp-table
+#| label: table1-spp-totals
 final_ETF_EPT_totals_spp <- final_ETF_EPT_totals |>
   select(-num_obs_stage, -life_stage) |>
   mutate(species = str_to_lower(species))
@@ -251,6 +249,7 @@ final_ETF_EPT_totals_spp <- final_ETF_EPT_totals |>
 combined_spp_totals <- bind_rows(
   raw_EPT_totals,
   raw_ETF_EPT_totals,
+  clean_ETF_EPT_totals,
   final_ETF_EPT_totals_spp
 ) |>
   distinct(dataset, species, total_obs, .keep_all = TRUE)
@@ -281,13 +280,14 @@ doc <- read_docx() |>
 
 print(
   doc,
-  target = here(L201_figs_dir, "201a_dataset_order_table.docx")
+  target = here(L201_figs_dir, "201_table1_dataset_order_table.docx")
 )
 
 # Clean up
 rm(
   raw_EPT_totals,
   raw_ETF_EPT_totals,
+  clean_ETF_EPT_totals,
   final_ETF_EPT_totals_spp,
   combined_spp_totals,
   pivoted_spp_totals,
@@ -459,7 +459,7 @@ ETF_EPT_ann_count <- final_ETF_EPT_metadata |>
 ### create viz
 
 ```{r}
-#| label: create-rg-sunburst
+#| label: figure1-rg-sunburst
 # Inner Ring Summary (Species)
 species_summary <- ETF_EPT_obs_status |>
   group_by(species, taxa_label) |>
@@ -540,7 +540,7 @@ grade_plot <- ggplot(ETF_EPT_obs_status, aes(y = prop)) +
 ggsave(
   filename = here(
     L201_figs_dir,
-    "201_inat_obs_taxa_stage_grade.png"
+    "201_figure1_inat_obs_taxa_stage_grade.png"
   ),
   plot = grade_plot,
   width = 16,
@@ -553,7 +553,7 @@ ggsave(
 
 
 ```{r}
-#| label: create-rg-table
+#| label: table2-rg-status
 summary_table_data <- ETF_EPT_obs_status |>
   mutate(
     # Percent of total dataset
@@ -592,12 +592,12 @@ doc <- read_docx() |>
   body_add_flextable(ft)
 
 # Save Word doc
-print(doc, target = here(L201_figs_dir, "201_inat_obs_table.docx"))
+print(doc, target = here(L201_figs_dir, "201_table2_inat_obs_table.docx"))
 ```
 
 ```{r}
-#| label: create-users-count-bar
-# [X] # observeres # identifiers (bar)
+#| label: figure2-users-count-bar
+# [X] # observers # identifiers (bar)
 
 users_plot <- ETF_EPT_users |>
   ggplot(aes(x = contributer_type, fill = species)) +
@@ -629,7 +629,7 @@ users_plot <- ETF_EPT_users |>
   )
 
 ggsave(
-  filename = here(L201_figs_dir, "201_inat_users.png"),
+  filename = here(L201_figs_dir, "201_figure2_inat_users.png"),
   plot = users_plot,
   width = 10,
   height = 6,
@@ -640,7 +640,7 @@ ggsave(
 ```
 
 ```{r}
-#| label: create-num-id-ann-bar
+#| label: figure3-num-id-ann-bar
 # [X] annoted/not (bar)
 # [X] # IDs (bar)
 
@@ -705,7 +705,7 @@ ids_anns_plot <- combined_ids_ann |>
   )
 
 ggsave(
-  filename = here(L201_figs_dir, "201_inat_num_ids_ann.png"),
+  filename = here(L201_figs_dir, "201_figure3_inat_num_ids_ann.png"),
   plot = ids_anns_plot,
   width = 10,
   height = 6,
@@ -716,9 +716,10 @@ ggsave(
 ```
 
 ```{r}
-#| label: fig1-combined
+#| label: figure4-combined
+library(patchwork)
 ggsave(
-  filename = here(L201_figs_dir, "201_fig1.png"),
+  filename = here(L201_figs_dir, "201_figure4.png"),
   plot = grade_plot + (users_plot / ids_anns_plot),
   width = 18,
   height = 10,
@@ -730,7 +731,7 @@ ggsave(
 
 
 ```{r}
-#| label: create-distr-map
+#| label: TODO-figure5-distr-map
 # [X] % of global data (simple stat)
 # [] map of obs study distribution
 ```
@@ -764,7 +765,7 @@ num_obs_globe <- raw_EPT |>
   pull()
 
 prop_in_study <- num_obs_study / num_obs_globe * 100
-print(prop_in_study) # 10.50%
+print(prop_in_study) # 12.95%
 ```
 
 ```{r}
@@ -776,7 +777,7 @@ not_rg <- ETF_EPT_obs_status |>
   pull()
 
 prop_not_rg <- not_rg / num_obs_study * 100
-print(prop_not_rg) #91.909%
+print(prop_not_rg) #91.28%
 ```
 
 ```{r}
@@ -787,7 +788,7 @@ zero_ann <- combined_ids_ann |>
   pull()
 
 prop_zero_ann <- zero_ann / num_obs_study * 100
-print(prop_zero_ann) # 85.97%
+print(prop_zero_ann) # 83.58%
 ```
 
 
@@ -799,7 +800,7 @@ one_ids <- combined_ids_ann |>
   pull()
 
 prop_one_ids <- one_ids / num_obs_study * 100
-print(prop_one_ids) # 50.12%
+print(prop_one_ids) # 50.69%
 ```
 
 ```{r}
@@ -815,9 +816,9 @@ unique_users <- ETF_EPT_users |>
   group_by(contributer_type) |>
   summarize(num_contributers = n_distinct(all_user_ids), .groups = "drop")
 print(unique_users)
-# 1194 annotators
-# 15025 identifiers
-# 14220 observers
+# 1,468 annotators
+# 17,814 identifiers
+# 16,901 observers
 ```
 
 ```{r}
@@ -827,182 +828,187 @@ unique_life_stages <- ETF_EPT_obs_status |>
   summarize(immature_sum = sum(num_obs_stage_grade)) |>
   pull()
 
-
 prop_immature <- unique_life_stages / num_obs_study * 100
 prop_adult <- 100 - prop_immature
-print(prop_immature) #11.66%
-print(prop_adult) #88.339%
+print(prop_immature) #10.43%
+print(prop_adult) #89.57%
 ```
 
 
-# inat order map
 
-```{r}
-#| label: prep-data
-ept_sf <- final_ETF_EPT |>
-  filter(!is.na(long) & !is.na(lat)) |>
-  st_as_sf(coords = c("long", "lat"), crs = 4326)
 
-ept_sf <- ept_sf |>
-  mutate(
-    clean_stage = case_when(
-      grepl("adult", life_stage, ignore.case = TRUE) ~ "Adult",
-      grepl(
-        "immature|nymph|larva",
-        life_stage,
-        ignore.case = TRUE
-      ) ~ "Immature",
-      TRUE ~ tolower(trimws(as.character(life_stage)))
-    ),
-    order_name = trimws(species), # Order column
-    map_lifestage = factor(
-      paste(order_name, "-", clean_stage),
-      levels = names(shape_values_order)
-    )
-  ) %>%
-  mutate(
-    plot_order = case_when(
-      order_name == "Trichoptera" ~ 1,
-      order_name == "Ephemeroptera" ~ 2,
-      order_name == "Plecoptera" ~ 3
-    )
-  ) %>%
-  arrange(plot_order)
-```
+# legacy code
 
+## inat order map
 
 ```{r}
 #| label: set-colors
-# Shapes by Order (21 = Circle, 22 = Square, 24 = Triangle)
-shape_values_order <- c(
-  "Ephemeroptera - Adult" = 21,
-  "Ephemeroptera - Immature" = 21,
-  "Plecoptera - Adult" = 22,
-  "Plecoptera - Immature" = 22,
-  "Trichoptera - Adult" = 24,
-  "Trichoptera - Immature" = 24
-)
+# # Shapes by Order (21 = Circle, 22 = Square, 24 = Triangle)
+# shape_values_order <- c(
+#   "Ephemeroptera - Adult" = 21,
+#   "Ephemeroptera - Immature" = 21,
+#   "Plecoptera - Adult" = 22,
+#   "Plecoptera - Immature" = 22,
+#   "Trichoptera - Adult" = 24,
+#   "Trichoptera - Immature" = 24
+# )
 
-# Border/Outline colors matching Order colors
-color_values_order <- c(
-  "Ephemeroptera - Adult" = "#1F77B4", # Deep Blue
-  "Ephemeroptera - Immature" = "#1F77B4",
-  "Plecoptera - Adult" = "#2CA02C", # Deep Green
-  "Plecoptera - Immature" = "#2CA02C",
-  "Trichoptera - Adult" = "#FF7F0E", # Deep Orange
-  "Trichoptera - Immature" = "#FF7F0E"
-)
+# # Border/Outline colors matching Order colors
+# color_values_order <- c(
+#   "Ephemeroptera - Adult" = "#1F77B4", # Deep Blue
+#   "Ephemeroptera - Immature" = "#1F77B4",
+#   "Plecoptera - Adult" = "#2CA02C", # Deep Green
+#   "Plecoptera - Immature" = "#2CA02C",
+#   "Trichoptera - Adult" = "#FF7F0E", # Deep Orange
+#   "Trichoptera - Immature" = "#FF7F0E"
+# )
 
-# Interior fill colors: Order color for adults, transparent ("NA") for immatures
-fill_values_order <- c(
-  "Ephemeroptera - Adult" = "#1F77B4",
-  "Ephemeroptera - Immature" = "NA",
-  "Plecoptera - Adult" = "#2CA02C",
-  "Plecoptera - Immature" = "NA",
-  "Trichoptera - Adult" = "#FF7F0E",
-  "Trichoptera - Immature" = "NA"
-)
+# # Interior fill colors: Order color for adults, transparent ("NA") for immatures
+# fill_values_order <- c(
+#   "Ephemeroptera - Adult" = "#1F77B4",
+#   "Ephemeroptera - Immature" = "NA",
+#   "Plecoptera - Adult" = "#2CA02C",
+#   "Plecoptera - Immature" = "NA",
+#   "Trichoptera - Adult" = "#FF7F0E",
+#   "Trichoptera - Immature" = "NA"
+# )
 ```
+
+```{r}
+#| label: prep-data
+# ept_sf <- final_ETF_EPT |>
+#   filter(!is.na(long) & !is.na(lat)) |>
+#   st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+# ept_sf <- ept_sf |>
+#   mutate(
+#     clean_stage = case_when(
+#       grepl("adult", life_stage, ignore.case = TRUE) ~ "Adult",
+#       grepl(
+#         "immature|nymph|larva",
+#         life_stage,
+#         ignore.case = TRUE
+#       ) ~ "Immature",
+#       TRUE ~ tolower(trimws(as.character(life_stage)))
+#     ),
+#     order_name = trimws(species), # Order column
+#     map_lifestage = factor(
+#       paste(order_name, "-", clean_stage),
+#       levels = names(shape_values_order)
+#     )
+#   ) %>%
+#   mutate(
+#     plot_order = case_when(
+#       order_name == "Trichoptera" ~ 1,
+#       order_name == "Ephemeroptera" ~ 2,
+#       order_name == "Plecoptera" ~ 3
+#     )
+#   ) %>%
+#   arrange(plot_order)
+```
+
 
 ```{r}
 #| label: make-order-map
 # Calculate padded limits to prevent edge clipping
-bbox <- st_bbox(study_area_sf)
-x_range <- bbox["xmax"] - bbox["xmin"]
-y_range <- bbox["ymax"] - bbox["ymin"]
+# study_area_sf<-ept_sf
 
-xlim_padded <- c(
-  bbox["xmin"] - (x_range * 0.03),
-  bbox["xmax"] + (x_range * 0.03)
-)
-ylim_padded <- c(
-  bbox["ymin"] - (y_range * 0.03),
-  bbox["ymax"] + (y_range * 0.03)
-)
+# bbox <- st_bbox(study_area_sf)
+# x_range <- bbox["xmax"] - bbox["xmin"]
+# y_range <- bbox["ymax"] - bbox["ymin"]
 
-order_map <- ggplot() +
-  # 1. BASEMAP: North America Landmass
-  geom_sf(data = basemap_land, fill = "#EBEBEB", color = NA) +
+# xlim_padded <- c(
+#   bbox["xmin"] - (x_range * 0.03),
+#   bbox["xmax"] + (x_range * 0.03)
+# )
+# ylim_padded <- c(
+#   bbox["ymin"] - (y_range * 0.03),
+#   bbox["ymax"] + (y_range * 0.03)
+# )
 
-  # 2. BASEMAP: State Boundaries
-  geom_sf(data = basemap_states, fill = NA, color = "#CCCCCC", size = 0.3) +
+# order_map <- ggplot() +
+#   # 1. BASEMAP: North America Landmass
+#   geom_sf(data = basemap_land, fill = "#EBEBEB", color = NA) +
 
-  # 3. STUDY AREA FOOTPRINT
-  geom_sf(
-    data = study_area_sf,
-    fill = "#D9E8F5",
-    color = "#2B5C8F",
-    size = 0.7,
-    alpha = 0.4
-  ) +
+#   # 2. BASEMAP: State Boundaries
+#   geom_sf(data = basemap_states, fill = NA, color = "#CCCCCC", size = 0.3) +
 
-  # 4. ORDER OCCURRENCE POINTS
-  geom_sf(
-    data = ept_sf |> filter(!is.na(map_lifestage)),
-    aes(
-      shape = map_lifestage,
-      color = map_lifestage,
-      fill = map_lifestage
-    ),
-    stroke = 0.4,
-    size = 0.8,
-    alpha = 0.7
-  ) +
-  facet_wrap(~order_name, ncol = 3) +
+#   # 3. STUDY AREA FOOTPRINT
+#   geom_sf(
+#     data = study_area_sf,
+#     fill = "#D9E8F5",
+#     color = "#2B5C8F",
+#     size = 0.7,
+#     alpha = 0.4
+#   ) +
 
-  # Padded Viewport limits
-  coord_sf(
-    xlim = xlim_padded,
-    ylim = ylim_padded,
-    expand = FALSE
-  ) +
+#   # 4. ORDER OCCURRENCE POINTS
+#   geom_sf(
+#     data = ept_sf |> filter(!is.na(map_lifestage)),
+#     aes(
+#       shape = map_lifestage,
+#       color = map_lifestage,
+#       fill = map_lifestage
+#     ),
+#     stroke = 0.4,
+#     size = 0.8,
+#     alpha = 0.7
+#   ) +
+#   facet_wrap(~order_name, ncol = 3) +
 
-  scale_shape_manual(values = shape_values_order, name = "Order & Life Stage") +
-  scale_color_manual(values = color_values_order, name = "Order & Life Stage") +
-  scale_fill_manual(values = fill_values_order, name = "Order & Life Stage") +
-  guides(
-    shape = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1)),
-    color = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1)),
-    fill = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1))
-  ) +
-  labs(
-    title = "EPT Order-Level Occurrences Across Eastern USA",
-    x = NULL,
-    y = NULL
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-    panel.grid.major = element_line(
-      color = "#D0D0D0",
-      linetype = "dashed",
-      size = 0.2
-    ),
-    panel.background = element_rect(fill = "#C6E2FF", color = NA),
-    panel.border = element_rect(color = "#333333", fill = NA, size = 0.8),
-    axis.text = element_text(size = 8),
-    legend.position = "right",
-    legend.title = element_text(face = "bold", size = 10),
-    legend.text = element_text(size = 9),
-    legend.background = element_rect(fill = "white", color = "#C0C0C0")
-  )
+#   # Padded Viewport limits
+#   coord_sf(
+#     xlim = xlim_padded,
+#     ylim = ylim_padded,
+#     expand = FALSE
+#   ) +
 
-# Display Map
-order_map
+#   scale_shape_manual(values = shape_values_order, name = "Order & Life Stage") +
+#   scale_color_manual(values = color_values_order, name = "Order & Life Stage") +
+#   scale_fill_manual(values = fill_values_order, name = "Order & Life Stage") +
+#   guides(
+#     shape = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1)),
+#     color = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1)),
+#     fill = guide_legend(override.aes = list(size = 3, stroke = 1, alpha = 1))
+#   ) +
+#   labs(
+#     title = "EPT Order-Level Occurrences Across Eastern USA",
+#     x = NULL,
+#     y = NULL
+#   ) +
+#   theme_minimal(base_size = 12) +
+#   theme(
+#     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+#     panel.grid.major = element_line(
+#       color = "#D0D0D0",
+#       linetype = "dashed",
+#       size = 0.2
+#     ),
+#     panel.background = element_rect(fill = "#C6E2FF", color = NA),
+#     panel.border = element_rect(color = "#333333", fill = NA, size = 0.8),
+#     axis.text = element_text(size = 8),
+#     legend.position = "right",
+#     legend.title = element_text(face = "bold", size = 10),
+#     legend.text = element_text(size = 9),
+#     legend.background = element_rect(fill = "white", color = "#C0C0C0")
+#   )
+
+# # Display Map
+# order_map
 ```
 
 ```{r}
-#| label: save-order-map
-ggsave(
-  filename = here(
-    L201_figs_dir,
-    "201_obs_order_map.png"
-  ),
-  plot = order_map,
-  width = 12,
-  height = 6,
-  units = "in",
-  dpi = 300,
-  bg = "white"
-)
+#| label: figure6-order-map
+# ggsave(
+#   filename = here(
+#     L201_figs_dir,
+#     "201_figure6_obs_order_map.png"
+#   ),
+#   plot = order_map,
+#   width = 12,
+#   height = 6,
+#   units = "in",
+#   dpi = 300,
+#   bg = "white"
+# )
 ```
