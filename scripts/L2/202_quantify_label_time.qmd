@@ -1,0 +1,141 @@
+---
+title: 202_quantify_label_time.qmd
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script prepares a dataset of IDs and annotations to add to iNaturalist.
+date: 2026-09-15 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+
+# Set up environment
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here)
+
+# Set working directory
+here::i_am("scripts/L2/202_quantify_label_time.qmd")
+
+# Point to directories
+L0_data_dir <- here("data", "L0") # L0 data
+L1_data_dir <- here("data", "L1") # L1 data
+L2_data_dir <- here("data", "L2") # L2 data
+```
+
+```{r}
+#| label: FX-fix-time
+normalize_time <- function(time_str) {
+  time_str <- str_to_lower(str_replace_all(time_str, "\\s+", ""))
+
+  # Add colons if missing
+  time_str <- case_when(
+    str_detect(time_str, "^\\d{4}(am|pm)$") ~ str_replace(
+      time_str,
+      "(\\d{2})(\\d{2})",
+      "\\1:\\2"
+    ),
+    str_detect(time_str, "^\\d{1,2}(am|pm)$") ~ str_replace(
+      time_str,
+      "(\\d+)",
+      "\\1:00"
+    ),
+    TRUE ~ time_str
+  )
+  return(time_str)
+}
+```
+
+```{r}
+#| label: get-data
+#read data
+file_path <- "102_time_recording_labels.txt"
+raw_lines <- readLines(here(L1_data_dir, file_path), warn = FALSE)
+
+
+# Extract the manual QA/QC/Later hours
+extra_hours <- 0
+if (any(str_detect(raw_lines, "(?i)marked with.*look at later"))) {
+  extra_hours <- extra_hours + 1.5
+}
+if (any(str_detect(raw_lines, "(?i)qa/qc data validation"))) {
+  extra_hours <- extra_hours + 4.0
+}
+
+clean_lines <- raw_lines |>
+  tail(-2) |>
+  head(-2)
+
+
+# Clean up dataframe
+labeling_df <- clean_lines |>
+  paste(collapse = "\n") |>
+  read_delim(
+    delim = "|",
+    col_names = c("date", "time_range", "obs_range"),
+    trim_ws = TRUE
+  ) |>
+  filter_out(is.na(date) | date == "") |>
+  # Split start and end times
+  separate(time_range, into = c("start_raw", "end_raw"), sep = "\\s*-\\s*") |>
+  # Split start and end observation counts
+  separate(obs_range, into = c("start_obs", "end_obs"), sep = "\\s*-\\s*") |>
+  mutate(
+    start_obs = as.numeric(gsub(",", "", start_obs)),
+    end_obs = as.numeric(gsub("[^0-9]", "", end_obs))
+  ) |>
+  # Clean up columns
+  mutate(
+    date = as.Date(date),
+    start_time_str = normalize_time(start_raw),
+    end_time_str = normalize_time(end_raw),
+
+    # Parse into actual datetime objects
+    start_dt = as.POSIXct(
+      paste(date, start_time_str),
+      format = "%Y-%m-%d %I:%M%p"
+    ),
+    end_dt = as.POSIXct(paste(date, end_time_str), format = "%Y-%m-%d %I:%M%p"),
+
+    # Calculate time spent labelling in hours
+    hours_spent = as.numeric(difftime(end_dt, start_dt, units = "hours")),
+
+    # Clean up commas and text from numbers
+    start_obs = as.numeric(str_remove_all(start_obs, "[,\\s]")),
+    end_obs = as.numeric(str_remove_all(end_obs, "[,\\s|obs]")),
+    obs_labeled = (end_obs - start_obs) + 1
+  )
+```
+
+
+```{r}
+#| label: summarize-stats
+# Generate summary statistics
+session_hours <- sum(labeling_df$hours_spent) # 75 hrs - Time spent label
+total_hours <- session_hours + extra_hours # 80.5 hrs - Total time spent labelling
+total_images <- sum(labeling_df$obs_labeled) # 78,529 Total images labelled
+avg_speed <- total_images / session_hours # 1,047.053 Avg. images labelled per hour
+avg_speed / 60 # 17.45089 avg. images labelled per minute
+
+# Daily metrics
+daily_breakdown <- labeling_df |>
+  group_by(date) |>
+  summarize(
+    `Hours Spent` = sum(hours_spent),
+    `Images Labeled` = sum(obs_labeled),
+    .groups = "drop"
+  )
+
+print(as.data.frame(daily_breakdown))
+```
