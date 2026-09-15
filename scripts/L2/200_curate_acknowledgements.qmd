@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script curates a list of iNaturalist users whose identifications, observations, and annotations contributed to this research.
-date: 2026-09-12 # last modified
+date: 2026-09-15 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
