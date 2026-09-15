@@ -1,5 +1,5 @@
 ---
-title: 200_curate_acknowledgements.qmd
+title: 203_curate_acknowledgements.qmd
 subtitle: ETF-EPT-iNat-2025 Data description
 author: 
     - name: Karina Torres
@@ -27,7 +27,7 @@ if (!require("pacman")) {
 pacman::p_load(tidyverse, here)
 
 # Set working directory
-here::i_am("scripts/L2/200_curate_acknowledgements.qmd")
+here::i_am("scripts/L2/203_curate_acknowledgements.qmd")
 
 # Point to directories
 L0_data_dir <- here("data", "L0") # L0 data
@@ -134,11 +134,11 @@ ETF_EPT_contrib_info <- bind_rows(
 
 ```{r}
 #| label: Export-data
-write_csv(ETF_EPT_users, here(L2_data_dir, "200a_ETF_EPT_inat_users.csv"))
+write_csv(ETF_EPT_users, here(L2_data_dir, "203a_ETF_EPT_inat_users.csv"))
 
 write_csv(
   ETF_EPT_contrib_info,
-  here(L2_data_dir, "200b_ETF_EPT_inat_contributed_info.csv")
+  here(L2_data_dir, "203b_ETF_EPT_inat_contributed_info.csv")
 )
 ```
 
