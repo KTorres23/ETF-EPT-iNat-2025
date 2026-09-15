@@ -135,6 +135,7 @@ ETF_EPT_contrib_info <- bind_rows(
 ```{r}
 #| label: Export-data
 write_csv(ETF_EPT_users, here(L2_data_dir, "200a_ETF_EPT_inat_users.csv"))
+
 write_csv(
   ETF_EPT_contrib_info,
   here(L2_data_dir, "200b_ETF_EPT_inat_contributed_info.csv")
