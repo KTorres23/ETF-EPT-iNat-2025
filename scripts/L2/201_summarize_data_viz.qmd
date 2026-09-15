@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script creates visualizations of my final data used for modelling and analyses.
-date: 2026-09-12 # last modified
+date: 2026-09-15 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -19,11 +19,25 @@ date-format: "yyyy-MM-dd"
 
 ```{r}
 #| label: setup-env
+install.packages("pak")
+pak::pkg_install("ropensci/rnaturalearthhires")
+
 # Load in packages
 if (!require("pacman")) {
   install.packages("pacman")
 }
-pacman::p_load(tidyverse, here, sf, fs, officer, flextable, scales)
+pacman::p_load(
+  data.table,
+  tidyverse,
+  here,
+  sf,
+  fs,
+  officer,
+  flextable,
+  scales,
+  rnaturalearth,
+  patchwork
+)
 
 # Set working directory
 here::i_am("scripts/L2/201_summarize_data_viz.qmd")
@@ -104,7 +118,7 @@ custom_colors <- c(
 )
 ```
 
-# iNat Order-level Data Summary
+# iNaturalist Data Summary
 
 ```{r}
 #| label: read-inat-data
@@ -147,7 +161,7 @@ final_ETF_EPT <- readRDS(here(
 rm(raw_ETF_EPT_sf, raw_ETF_EPT_df)
 ```
 
-## species totals Table
+## Dataset observation totals - Table 1
 
 ```{r}
 #| label: get-num-spp-raw
@@ -298,14 +312,7 @@ rm(
 
 
 
-
-```{r}
-#| label: create-spp-figure
-
-```
-
-
-## final data totals
+## Final Dataset Summaries
 
 ### prep data
 
@@ -472,7 +479,7 @@ lifestage_summary <- ETF_EPT_obs_status |>
 
 
 # Create plot
-grade_plot <- ggplot(ETF_EPT_obs_status, aes(y = prop)) +
+figure1 <- ggplot(ETF_EPT_obs_status, aes(y = prop)) +
   # Ring 1: Species
   geom_bar(
     data = species_summary,
@@ -542,7 +549,7 @@ ggsave(
     L201_figs_dir,
     "201_figure1_inat_obs_taxa_stage_grade.png"
   ),
-  plot = grade_plot,
+  plot = figure1,
   width = 16,
   height = 10,
   units = "in",
@@ -596,7 +603,7 @@ print(doc, target = here(L201_figs_dir, "201_table2_inat_obs_table.docx"))
 ```
 
 ```{r}
-#| label: figure2-users-count-bar
+#| label: supp-figure1-users-count-bar
 # [X] # observers # identifiers (bar)
 
 users_plot <- ETF_EPT_users |>
@@ -629,7 +636,7 @@ users_plot <- ETF_EPT_users |>
   )
 
 ggsave(
-  filename = here(L201_figs_dir, "201_figure2_inat_users.png"),
+  filename = here(L201_figs_dir, "201_suppfigure1_inat_users.png"),
   plot = users_plot,
   width = 10,
   height = 6,
@@ -640,7 +647,7 @@ ggsave(
 ```
 
 ```{r}
-#| label: figure3-num-id-ann-bar
+#| label: supp-figure2-num-id-ann-bar
 # [X] annoted/not (bar)
 # [X] # IDs (bar)
 
@@ -705,7 +712,7 @@ ids_anns_plot <- combined_ids_ann |>
   )
 
 ggsave(
-  filename = here(L201_figs_dir, "201_figure3_inat_num_ids_ann.png"),
+  filename = here(L201_figs_dir, "201_suppfigure2_inat_num_ids_ann.png"),
   plot = ids_anns_plot,
   width = 10,
   height = 6,
@@ -714,29 +721,6 @@ ggsave(
   bg = "white"
 )
 ```
-
-```{r}
-#| label: figure4-combined
-library(patchwork)
-ggsave(
-  filename = here(L201_figs_dir, "201_figure4.png"),
-  plot = grade_plot + (users_plot / ids_anns_plot),
-  width = 18,
-  height = 10,
-  units = "in",
-  dpi = 300,
-  bg = "white"
-)
-```
-
-
-```{r}
-#| label: TODO-figure5-distr-map
-# [X] % of global data (simple stat)
-# [] map of obs study distribution
-```
-
-
 
 ### summary stats
 
@@ -834,10 +818,574 @@ print(prop_immature) #10.43%
 print(prop_adult) #89.57%
 ```
 
+## Excluded Data Summary - Figure 2
+
+```{r}
+#| label: read-data
+reject_data <- read_rds(here(L1_data_dir, "103b_ETF_EPT_reject_annotated.rds"))
+
+final_data <- read_rds(here(L1_data_dir, "103a_ETF_EPT_final_annotated.rds"))
+```
+
+```{r}
+#| label: figure5a-excluded-data
+upd_reject_data <- reject_data |>
+  mutate(
+    obs_issues = case_when(
+      !is.na(odd_cases) & !str_detect(odd_cases, "suspended") ~ "other",
+      str_detect(obs_issues, "copyrighted") ~ "other",
+      str_detect(obs_issues, "unsure of ID") ~ "uncertain ID",
+      str_detect(obs_issues, "incorrect") ~ "incorrect order ID",
+      .default = obs_issues
+    )
+  ) |>
+  count(obs_issues, name = "num_obs") |>
+  mutate(
+    total_rejected = sum(num_obs),
+    # Label formatting: "n = 120 (40.0%)"
+    bar_label = paste0("n = ", scales::comma(num_obs))
+  )
 
 
+excluded_plot <- ggplot(
+  upd_reject_data,
+  aes(x = num_obs, y = reorder(obs_issues, num_obs))
+) +
+  geom_col(fill = "#d95f02", width = 0.6) +
+  geom_text(
+    aes(label = bar_label),
+    hjust = -0.1,
+    size = 3.5
+  ) +
+  scale_x_continuous(
+    labels = scales::comma,
+    expand = expansion(mult = c(0, 0.22)) # Room for text labels
+  ) +
+  labs(
+    title = "A. Excluded Observations",
+    subtitle = paste0(
+      "Total excluded = ",
+      sum(upd_reject_data$num_obs),
+      " records (<0.5% of total dataset)"
+    ),
+    x = "Number of Observations",
+    y = NULL
+  ) +
+  theme_classic(base_size = 14)
+
+excluded_plot
+
+## % data excluded
+nrow(reject_data) / nrow(final_data) * 100 # only 0.47% of dataset was excluded
+
+## % data excluded for wrong ID
+294 / nrow(final_data) * 100 # 0.38% of data was wrong
+```
+
+```{r}
+#| label: figure5b-num-ids-stacked
+combined_ids <- ETF_EPT_ids_count |>
+  mutate(
+    # Cap values at 5
+    id_bin = if_else(
+      total_IDs_count >= 4,
+      "4+",
+      as.character(total_IDs_count)
+    ),
+    id_bin = factor(
+      id_bin,
+      levels = c("1", "2", "3", "4+")
+    )
+  ) |>
+  count(species, id_bin, name = "num_observations") |>
+  group_by(species) |>
+  mutate(
+    total_obs = sum(num_observations),
+    pct_observations = (num_observations / total_obs) * 100
+  ) |>
+  ungroup()
+
+stacked_ids_plot <- combined_ids |>
+  ggplot(aes(x = species, y = pct_observations, fill = factor(id_bin))) +
+  geom_col(width = 0.45) +
+  geom_text(
+    aes(label = paste0(round(pct_observations, 2), "%\n")),
+    position = position_stack(vjust = 0.5),
+    color = "black",
+    fontface = "bold",
+    size = 3.5
+  ) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
+  labs(
+    title = "B. Number of IDs per Observation",
+    x = "Taxonomic Order",
+    y = "% of Dataset"
+  ) +
+  theme_classic(base_size = 14)
+stacked_ids_plot
+```
+
+```{r}
+#| label: figure5-stacked
+figure2 <- excluded_plot | stacked_ids_plot
+
+ggsave(
+  filename = here(
+    L201_figs_dir,
+    "201_figure2_excluded_data.png"
+  ),
+  plot = figure2,
+  width = 12,
+  height = 6,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+# GBIF vs iNat records in ETF - Figure 3
+
+## prep data
+
+```{r}
+#| label: read-ecoregion-data
+# Grab L1 ecoregions
+ecoregion_shp_dir <- here(
+  L0_data_dir,
+  "000a_na_cec_eco_l1",
+  "NA_CEC_Eco_Level1.shp"
+)
+
+# Filter ecoregions to Eastern Temperate Forests
+etf_poly <- st_read(ecoregion_shp_dir) |>
+  filter(NA_L1NAME == "EASTERN TEMPERATE FORESTS")
+```
+
+```{r}
+#| label: read-GBIF-data
+gbif_data <- fread(here(
+  L0_data_dir,
+  "0065066-260226173443078",
+  "0065066-260226173443078.csv"
+))
+
+gbif_data_sf <- gbif_data |>
+  select(
+    gbifID,
+    order,
+    species,
+    eventDate,
+    datasetKey,
+    decimalLatitude,
+    decimalLongitude
+  ) |>
+  sf::st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+
+if (st_crs(gbif_data_sf) != st_crs(etf_poly)) {
+  gbif_data_sf <- st_transform(gbif_data_sf, st_crs(etf_poly))
+}
+```
+
+
+```{r}
+#| label: filter-GBIF-data
+# Clip / spatially filter points falling within the ETF
+etf_ept_gbif_sf <- gbif_data_sf |>
+  st_filter(etf_poly, .predicate = st_intersects)
+
+# Save gbif data shp
+gbif_save_dir <- here(L2_data_dir, "201_ETF_EPT_GBIF_shp")
+fs::dir_create(gbif_save_dir)
+st_write(
+  etf_ept_gbif_sf,
+  file.path(gbif_save_dir, "201_ETF_EPT_GBIF.shp"),
+  delete_dsn = TRUE
+)
+
+rm(gbif_data, gbif_data_sf)
+gc()
+```
+
+```{r}
+#| label: read-ETF-GBIF-data
+gbif_save_dir <- here(L2_data_dir, "201_ETF_EPT_GBIF_shp")
+etf_ept_gbif_sf <- st_read(file.path(gbif_save_dir, "201_ETF_EPT_GBIF.shp"))
+```
+
+```{r}
+#| label: read-ETF-iNat-data
+# Read in iNat Data
+final_ETF_EPT_sf <- final_ETF_EPT |>
+  sf::st_as_sf(coords = c("long", "lat"), crs = 4326) |>
+  st_transform(st_crs(etf_poly))
+```
+
+## viz data
+
+```{r}
+#| label: summarize-ETF-gbif-data
+## 249,812 gbif records all-time in ETF
+nrow(etf_ept_gbif_sf)
+
+## however, only 137,675 records in 21st century in ETF
+modern_gbif_sf <- etf_ept_gbif_sf |>
+  filter(dplyr::between(
+    as.Date(eventDate),
+    as.Date("2000-01-01"),
+    as.Date("2025-12-31")
+  ))
+```
+
+```{r}
+#| label: prep-hex-data
+target_crs <- 5070 # Albers Equal
+poly_proj <- st_transform(etf_poly, crs = target_crs)
+inat_proj <- st_transform(
+  final_ETF_EPT_sf |> select(order = species, geometry),
+  crs = target_crs
+)
+gbif_proj <- st_transform(modern_gbif_sf, crs = target_crs)
+
+# Build hexagonal grid (50 km cells)
+hex_grid <- st_make_grid(poly_proj, cellsize = 50000, square = FALSE) |>
+  st_as_sf() |>
+  rename(geometry = x) |>
+  mutate(hex_id = row_number()) |>
+  st_filter(poly_proj, .predicate = st_intersects)
+
+# Aggregate counts by hex_id and order
+inat_order_counts <- hex_grid |>
+  st_join(inat_proj) |>
+  st_drop_geometry() |>
+  filter(!is.na(order)) |>
+  count(hex_id, order, name = "n_inat")
+
+gbif_order_counts <- hex_grid |>
+  st_join(gbif_proj) |>
+  st_drop_geometry() |>
+  filter(!is.na(order)) |>
+  count(hex_id, order, name = "n_gbif")
+
+# Merge counts and calculate comparison categories by order
+hex_order_comp <- full_join(
+  inat_order_counts,
+  gbif_order_counts,
+  by = c("hex_id", "order")
+) |>
+  mutate(
+    n_inat = coalesce(n_inat, 0L),
+    n_gbif = coalesce(n_gbif, 0L),
+    total_obs = n_inat + n_gbif,
+    log_density = log10(total_obs),
+    contribution_type = case_when(
+      n_gbif == 0 & n_inat > 0 ~ "New Coverage (iNaturalist)",
+      n_inat > n_gbif ~ "iNaturalist Higher Density",
+      n_inat == n_gbif ~ "Equal Density",
+      n_inat < n_gbif ~ "GBIF Higher Density"
+    )
+  ) |>
+  # Re-attach spatial geometry from hex_grid
+  left_join(hex_grid, by = "hex_id") |>
+  st_as_sf()
+
+# clean environment
+rm(inat_order_counts, gbif_order_counts, hex_grid, target_crs)
+rm(inat_proj, gbif_proj)
+```
+
+
+```{r}
+#| label: create-hex-map
+# Set map limits
+bbox <- st_bbox(poly_proj)
+x_range <- bbox["xmax"] - bbox["xmin"]
+y_range <- bbox["ymax"] - bbox["ymin"]
+
+xlim_padded <- c(
+  bbox["xmin"] - (x_range * 0.03),
+  bbox["xmax"] + (x_range * 0.03)
+)
+ylim_padded <- c(
+  bbox["ymin"] - (y_range * 0.03),
+  bbox["ymax"] + (y_range * 0.03)
+)
+
+# Pull North America landmass and project
+basemap_land <- ne_countries(
+  scale = 50,
+  continent = "North America",
+  returnclass = "sf"
+) |>
+  st_transform(crs = st_crs(poly_proj))
+
+# Pull US & Canada state/province lines and project
+basemap_states <- ne_states(
+  country = c("United States of America", "Canada"),
+  returnclass = "sf"
+) |>
+  st_transform(crs = st_crs(poly_proj))
+
+
+# Build faceted map
+figure3 <- ggplot() +
+  # North America Landmass
+  geom_sf(
+    data = basemap_land,
+    fill = "#EBEBEB",
+    color = NA
+  ) +
+
+  # State / Province Boundaries
+  geom_sf(
+    data = basemap_states,
+    fill = NA,
+    color = "#CCCCCC",
+    linewidth = 0.3
+  ) +
+
+  # Study area
+  geom_sf(
+    data = poly_proj,
+    fill = "#D9E8F5",
+    color = "#919191ff",
+    linewidth = 0.7,
+    alpha = 0.4
+  ) +
+
+  # Hexagonal comparison bins
+  geom_sf(
+    data = hex_order_comp,
+    aes(fill = contribution_type, alpha = log_density),
+    color = NA
+  ) +
+
+  # Facet across orders horizontally
+  facet_wrap(vars(order), nrow = 1) +
+
+  # Padded map limits
+  coord_sf(
+    xlim = xlim_padded,
+    ylim = ylim_padded,
+    expand = FALSE
+  ) +
+
+  # Category color scale
+  scale_fill_manual(
+    values = c(
+      "New Coverage (iNaturalist)" = "#2ca25f",
+      "iNaturalist Higher Density" = "#2b83ba",
+      "Equal Density" = "#feb24c",
+      "GBIF Higher Density" = "#d7191c"
+    ),
+    name = "Dataset Comparison"
+  ) +
+
+  # Continuous scale for Observation Density
+  scale_alpha_continuous(
+    range = c(0.35, 1.0),
+    name = "Total Density\n(Observations)",
+    breaks = log10(c(1, 10, 100, 1000)),
+    labels = c("1", "10", "100", "1,000+")
+  ) +
+
+  # Ensure legend keys remain distinct
+  guides(
+    fill = guide_legend(override.aes = list(alpha = 1), order = 1),
+    alpha = guide_legend(override.aes = list(fill = "#2b83ba"), order = 2)
+  ) +
+
+  labs(
+    title = "iNaturalist Observations Relative to GBIF Occurrences by Aquatic Insect Order",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    panel.grid.major = element_line(
+      color = "#D0D0D0",
+      linetype = "dashed",
+      linewidth = 0.2
+    ),
+    panel.background = element_rect(fill = "#C6E2FF", color = NA), # Matching water tone
+    panel.border = element_rect(color = "#333333", fill = NA, linewidth = 0.8),
+    strip.text = element_text(face = "bold", size = 11),
+    strip.background = element_rect(fill = "#EBEBEB", color = "#CCCCCC"),
+    axis.text = element_text(size = 8),
+    legend.position = "right",
+    legend.title = element_text(face = "bold", size = 10),
+    legend.text = element_text(size = 9),
+    legend.background = element_rect(fill = "white", color = "#C0C0C0"),
+    panel.spacing = unit(1, "lines")
+  )
+
+figure3
+```
+
+
+```{r}
+#| label: figure3-save-hex-map
+ggsave(
+  filename = here(
+    L201_figs_dir,
+    "201_figure3_dataset_map.png"
+  ),
+  plot = figure3,
+  width = 12,
+  height = 6,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
 
 # legacy code
+
+## combined figure 4
+
+```{r}
+#| label: figure4-combined
+# ggsave(
+#   filename = here(L201_figs_dir, "201_figure4.png"),
+#   plot = grade_plot + (users_plot / ids_anns_plot),
+#   width = 18,
+#   height = 10,
+#   units = "in",
+#   dpi = 300,
+#   bg = "white"
+# )
+```
+
+
+## point maps of occurrence data
+
+
+```{r}
+#| label: viz-ETF-gbif-map
+### GBIF occurrence data points
+# map_plot <- ggplot() +
+#   # Ecoregion boundary background
+#   geom_sf(
+#     data = etf_poly,
+#     fill = "#f5f5f0",
+#     color = "#8c8c8c",
+#     linewidth = 0.4
+#   ) +
+#   # EPT Occurrence Points colored by Order
+#   geom_sf(
+#     data = modern_gbif_sf,
+#     aes(color = order),
+#     alpha = 0.4,
+#     size = 0.8,
+#     shape = 16
+#   ) +
+#   # Color palette suitable for ecological orders
+#   scale_color_brewer(palette = "Dark2", name = "Order") +
+#   guides(color = guide_legend(override.aes = list(size = 3, alpha = 1))) +
+#   labs(
+#     title = "Occurrence Records Across Eastern Temperate Forests",
+#     subtitle = paste0(
+#       "Total occurrences: N = ",
+#       scales::comma(nrow(modern_gbif_sf))
+#     ),
+#     caption = "Data: GBIF / iNaturalist | Projection: NAD83 / Conus Albers (EPSG: 5070)"
+#   ) +
+#   theme_minimal(base_size = 11) +
+#   theme(
+#     panel.grid.major = element_line(color = "#e0e0e0", linewidth = 0.2),
+#     legend.position = "right",
+#     legend.background = element_rect(fill = "white", color = NA),
+#     plot.title = element_text(face = "bold")
+#   )
+
+# map_plot
+```
+
+
+
+```{r}
+#| label: viz-ETF-iNat-data
+### iNat occurrence data points
+# inat_map_plot <- ggplot() +
+#   # Ecoregion boundary background
+#   geom_sf(
+#     data = etf_poly,
+#     fill = "#f5f5f0",
+#     color = "#8c8c8c",
+#     linewidth = 0.4
+#   ) +
+#   # EPT Occurrence Points colored by Order
+#   geom_sf(
+#     data = final_ETF_EPT_sf,
+#     aes(color = species),
+#     alpha = 0.4,
+#     size = 0.8,
+#     shape = 16
+#   ) +
+#   geom_hex(data = final_ETF_EPT, aes(x = lat, y = long), bins = 70) +
+#   # Color palette suitable for ecological orders
+#   scale_color_brewer(palette = "Dark2", name = "Order") +
+#   guides(color = guide_legend(override.aes = list(size = 3, alpha = 1))) +
+#   labs(
+#     title = "Occurrence Records Across Eastern Temperate Forests",
+#     subtitle = paste0(
+#       "Total occurrences: N = ",
+#       scales::comma(nrow(final_ETF_EPT_sf))
+#     ),
+#     caption = "Data: GBIF / iNaturalist | Projection: NAD83 / Conus Albers (EPSG: 5070)"
+#   ) +
+#   theme_minimal(base_size = 11) +
+#   theme(
+#     panel.grid.major = element_line(color = "#e0e0e0", linewidth = 0.2),
+#     legend.position = "right",
+#     legend.background = element_rect(fill = "white", color = NA),
+#     plot.title = element_text(face = "bold")
+#   )
+
+# inat_map_plot
+```
+
+
+
+## num ids per obs
+```{r}
+#| label: figure5a-num-ids-per-obs
+# ids_plot <- combined_ids |>
+#   ggplot(aes(x = factor(id_bin), y = num_observations, fill = species)) +
+#   geom_col(
+#     position = position_dodge(width = 0.8),
+#     width = 0.7,
+#     color = "white"
+#   ) +
+#   # Count labels above each bar
+#   geom_text(
+#     aes(label = scales::comma(num_observations)),
+#     position = position_dodge(width = 0.8),
+#     vjust = -0.4,
+#     size = 2.8
+#   ) +
+#   scale_y_continuous(
+#     labels = scales::comma,
+#     expand = expansion(mult = c(0, 0.18))
+#   ) +
+#   scale_fill_manual(values = custom_colors) +
+#   labs(
+#     x = "Number of Identifications per Observation",
+#     y = "Number of Observations",
+#     fill = "Taxon",
+#     title = "Distribution of Identifications per Observation"
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+#     strip.text = element_text(face = "bold", size = 11),
+#     strip.background = element_rect(fill = "#F0F0F0", color = NA),
+#     axis.title = element_text(face = "bold"),
+#     legend.position = "none"
+#   )
+
+# ids_plot
+```
 
 ## inat order map
 
