@@ -216,7 +216,7 @@ tidy_data <- parsed_data |>
     # Create life_stage column
     life_stage = case_when(
       label_adult ~ "adult",
-      label_juvenile ~ "nymph/larvae",
+      label_juvenile ~ "immature",
       (notes_egg | notes_eggs) & label_evidence ~ "eggs",
       TRUE ~ NA_character_
     ),
@@ -304,7 +304,7 @@ For `cannot_identify` and `species_id_corrected`, observations were moved to a h
 | --- | --- | --- | --- | --- |
 | [1] | `species` | Insect order | `Ephemeroptera`, `Plecoptera`, or `Trichoptera` | string |
 | [2] | `observation_id` | Observation ID number on iNaturalist | eg., `12345` | double |
-| [3] | `life_stage` | Life stage of organism contained in observation images | `adult`, `nymph/larvae`, `eggs` | string |
+| [3] | `life_stage` | Life stage of organism contained in observation images | `adult`, `immature`, `eggs` | string |
 | [4] | `evidence_type` | Type of evidence in image | `nymph to adult exuviae`, `nymph-related evidence`, `NA` [NA = actual organism probably] | string |
 | [5] | `multiple_specimen_present` | Multiple specimen of the same insect order of the observation present | `TRUE`, `FALSE` | logical | 
 | [6] | `human_present` | presence of human skin, hands, fingers, body, etc. in observation image(s) | `TRUE`, `FALSE` | logical | 
