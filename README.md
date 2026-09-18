@@ -1,4 +1,4 @@
-# ETF-EPT-iNat-2025 Dataset: Validated aquatic insect records transformed by secondary data from iNaturalist images
+# ETF-EPT-iNat-2025 Dataset: Aquatic insect records transformed by secondary data from iNaturalist images
 
 [Karina M. Torres*](https://ktorres23.github.io/), [Brent S. Pease](https://www.peaselab.com/)
 
