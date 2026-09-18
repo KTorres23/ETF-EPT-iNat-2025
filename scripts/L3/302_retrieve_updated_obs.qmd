@@ -69,11 +69,6 @@ total_batches <- length(id_chunks)
 
 ## Check existing data
 
-Observation data was pulled between November 3rd and 4th 2025 for EPT taxa.
-However, the study period is from 2000-2025, so additional data needs to be
-pulled to complete the period.
-
-
 ## Retrieve new data
 
 ```{r}
