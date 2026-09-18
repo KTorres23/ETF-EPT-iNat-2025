@@ -65,10 +65,6 @@ taxon_datasets <- list()
 
 ## Check existing data
 
-Observation data was pulled between November 3rd and 4th 2025 for EPT taxa.
-However, the study period is from 2000-2025, so additional data needs to be
-pulled to complete the period.
-
 If starting from scratch, skip this cell and change `last_obs_id` to 0 for the [API call parameters](#retrieve-api-data)
 
 ```{r}
