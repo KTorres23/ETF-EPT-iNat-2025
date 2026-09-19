@@ -9,13 +9,10 @@ toc: true
 format:
   html:
     embed-resources: true
-abstract: This script prepares a dataset of IDs and annotations to add to iNaturalist.
+abstract: This script prepares and uploads a dataset of identifications to iNaturalist.
 date: 2026-09-19 # last modified
 date-format: "yyyy-MM-dd"
 ---
-
-
-For black bears, I should ensure I account for presence, evidence, alive/dead, life stages
 
 # Requirements
 
@@ -88,17 +85,6 @@ ETF_EPT_metadata_df <- ETF_EPT_inat_df |>
 table(ETF_EPT_inat_df$species, ETF_EPT_inat_df$life_stage)
 ```
 
-
-```{r}
-#| label: read-sample-data
-# ETF_EPT_inat_df <- read_csv(here(L301_data_dir, "EPT_sample_data_2026.csv")) |>
-#   slice(6:10) |>
-#   mutate(species = "Ephemeroptera", observation_id = id) |>
-#   mutate(
-#     life_stage = "adult",
-#     evidence_type = "organism"
-#   )
-```
 
 # Identifications
 
@@ -215,67 +201,6 @@ rm(final_ids_to_post)
 ```
 
 ## Run uploads
-
-```{r}
-#| label: upload-inat-ids
-# # Read in unposted observations in the up-to-date dataset
-# final_ids_to_post_master <- readRDS(here(
-#   L301_data_dir,
-#   "301b_ETF_EPT_IDS_api_uploads.rds"
-# ))
-
-# unposted_ids <- final_ids_to_post_master |>
-#   filter(posted_to_inat == FALSE)
-
-# # Grabs first batch number available
-# current_batch_num <- min(unposted_ids$batch_id, na.rm = TRUE)
-
-# # Filter to today's uploads
-# ids_for_today <- unposted_ids |>
-#   filter(batch_id == current_batch_num)
-
-# # Log start
-# identification_log <- here(L301_data_dir, "301c_ETF_EPT_IDS_api_log.txt")
-
-# start_msg <- paste0(
-#   Sys.time(),
-#   " | Executing upload for Batch ID: ",
-#   current_batch_num
-# )
-
-# message(start_msg)
-# write(start_msg, file = identification_log, append = TRUE)
-
-# # Run the ID loop
-# updated_ids <- split(ids_for_today, seq_len(nrow(ids_for_today))) |>
-#   map_dfr(
-#     ~ post_inat_id(
-#       .x,
-#       token = Sys.getenv("INAT_TOKEN"),
-#       log_file = identification_log
-#     )
-#   )
-
-# # Add today's progress back to main dataset:
-# reconciled_master <- final_ids_to_post_master |>
-#   rows_update(updated_ids, by = "observation_id")
-
-# saveRDS(
-#   reconciled_master,
-#   here(L301_data_dir, "301b_ETF_EPT_IDS_api_uploads.rds")
-# )
-
-# # Log end
-# end_msg <- paste0(
-#   Sys.time(),
-#   " | Master RDS saved successfully for Batch ID: ",
-#   current_batch_num
-# )
-
-# message(end_msg)
-# write(end_msg, file = identification_log, append = TRUE)
-```
-
 
 ```{r}
 #| label: new-upload-inat-ids
@@ -439,613 +364,75 @@ reconciled_ids_master |>
   filter(observation_id %in% failed_obs_ids)
 ```
 
-# Annotations
-
-Adds my annotations to confirm the life stage and evidence of presence of the observations I reviewed
-
-
-Is it worth going back and reviewing images as subimago vs adult?
-for ephemeroptera ^
-
-Ephemeroptera adults won't get life stage,
-unless they were associated with evidence,
-which indicates a subimago molt evidence
-
-For Trichoptera, I need to distinguish pupae
-
-* Ephemeroptera:
-  * life stage: `term_id=1`
-    * adult + evidence = subimago `&term_value_id=16` (&molt presence)
-    * nymph/larvae = nypmph `&term_value_id=5`
-    * adult `&term_value_id=2`
-  * presence: `term_id=22`
-    * organism: `&term_value_id=24`
-    * molt: `&term_value_id=28`
-
-* Plecoptera
-  * life stage: `term_id=1`
-    * adult `&term_value_id=2`
-    * nymph = nymph `&term_value_id=5`
-  * prsence: `?term_id=22`
-    * organism: `&term_value_id=24`
-
-* Trichoptera
-  * life stage: `term_id=1`
-    * adult `&term_value_id=2`
-    * larvae = larvae `&term_value_id=6`
-    * egg `&term_value_id=7`
-  * prsence: `?term_id=22`
-    * organism: `&term_value_id=24`
-    * construction : `&term_value_id=35`
-
-
+# Legacy Code
 
 ```{r}
-#| label: FX-post-annotation
-post_inat_annotation <- function(row_data, token, log_file) {
-  url <- "https://api.inaturalist.org/v1/annotations"
-
-  obs_id <- row_data$observation_id
-  attr_id <- row_data$controlled_attribute_id
-  val_id <- row_data$controlled_value_id
-
-  body <- list(
-    annotation = list(
-      resource_type = "Observation",
-      resource_id = obs_id,
-      controlled_attribute_id = attr_id,
-      controlled_value_id = val_id
-    )
-  )
-
-  response <- POST(
-    url = url,
-    add_headers(Authorization = paste("Bearer", token)),
-    encode = "json",
-    body = body,
-    user_agent(USER_NAME)
-  )
-
-  if (status_code(response) == 200) {
-    row_data$posted_to_inat <- TRUE
-    log_msg <- paste0(
-      Sys.time(),
-      " | Added Annotation (Attr: ",
-      attr_id,
-      ", Val: ",
-      val_id,
-      ") to observation # ",
-      obs_id
-    )
-  } else {
-    # Attempt to extract error details from the API response
-    error_msg <- tryCatch(
-      {
-        resp_content <- content(response, as = "text", encoding = "UTF-8")
-        parsed <- fromJSON(resp_content)
-        if (!is.null(parsed$error)) {
-          paste(parsed$error, collapse = "; ")
-        } else {
-          paste(parsed$errors, collapse = "; ")
-        }
-      },
-      error = function(e) {
-        paste("HTTP Status Code:", status_code(response))
-      }
-    )
-
-    log_msg <- paste0(
-      Sys.time(),
-      " | Failed to add Annotation to observation # ",
-      obs_id,
-      " - ERROR: ",
-      error_msg
-    )
-    warning(log_msg)
-  }
-
-  # Append log entry to file
-  write(log_msg, file = log_file, append = TRUE)
-  # Add delay to respect API rate limit
-  Sys.sleep(SLEEP_RATE)
-  return(row_data)
-}
-```
-
-
-```{r}
-#| label: curate-datasets
-# Curate datasets to add annotations back to iNat
-
-#Ephemeroptera
-ephemeroptera_df <- ETF_EPT_metadata_df |>
-  filter(species == "Ephemeroptera") |>
-  select(
-    species,
-    life_stage,
-    evidence_type,
-    observation_id,
-    annotations,
-    identifications_count
-  ) |>
-  mutate(
-    posted_to_inat = FALSE,
-    taxon_id = 48011,
-
-    # Add Life Stage (term_id = 1)
-    life_stage_val = case_when(
-      life_stage == "adult" & evidence_type == "nymph to adult exuviae" ~ 16, # Subimago
-      life_stage == "adult" & evidence_type == "organism" ~ NA_real_, # did not distinguish adults/subimago
-      life_stage == "nymph/larvae" ~ 5, # Nymph
-      TRUE ~ NA_real_
-    ),
-
-    # Add Presence (term_id = 22)
-    presence_val = case_when(
-      evidence_type == "nymph to adult exuviae" ~ 28, # Molt
-      evidence_type == "nymph-related evidence" ~ 28, # Molt
-      evidence_type == "organism" ~ 24, # Organism
-      TRUE ~ NA_real_
-    )
-  ) |>
-  # Pivot longer so that each row represents exactly ONE distinct annotation payload
-  pivot_longer(
-    cols = c(life_stage_val, presence_val),
-    names_to = "attribute_type",
-    values_to = "controlled_value_id",
-    values_drop_na = TRUE
-  ) |>
-  mutate(
-    controlled_attribute_id = case_when(
-      attribute_type == "life_stage_val" ~ 1,
-      attribute_type == "presence_val" ~ 22
-    )
-  ) |>
-  select(-attribute_type)
-
-
-# Plecoptera
-plecoptera_df <- ETF_EPT_metadata_df |>
-  filter(species == "Plecoptera") |>
-  select(
-    species,
-    life_stage,
-    evidence_type,
-    observation_id,
-    annotations,
-    identifications_count
-  ) |>
-  mutate(
-    posted_to_inat = FALSE,
-    taxon_id = 47504,
-
-    # Add Life Stage (term_id = 1)
-    life_stage_val = case_when(
-      life_stage == "adult" & evidence_type == "organism" ~ 2, # Adult
-      life_stage == "nymph/larvae" ~ 5, # Nymph
-      TRUE ~ NA_real_
-    ),
-
-    # Add Presence (term_id = 22)
-    presence_val = case_when(
-      evidence_type == "nymph to adult exuviae" ~ 28, # Molt
-      evidence_type == "nymph-related evidence" ~ 28, # Molt
-      evidence_type == "organism" ~ 24, # Organism
-      TRUE ~ NA_real_
-    )
-  ) |>
-  pivot_longer(
-    cols = c(life_stage_val, presence_val),
-    names_to = "attribute_type",
-    values_to = "controlled_value_id",
-    values_drop_na = TRUE
-  ) |>
-  mutate(
-    controlled_attribute_id = case_when(
-      attribute_type == "life_stage_val" ~ 1,
-      attribute_type == "presence_val" ~ 22
-    )
-  ) |>
-  select(-attribute_type)
-
-# Trichoptera
-trichoptera_df <- ETF_EPT_metadata_df |>
-  filter(species == "Trichoptera") |>
-  select(
-    species,
-    life_stage,
-    evidence_type,
-    observation_id,
-    annotations,
-    identifications_count
-  ) |>
-  mutate(
-    posted_to_inat = FALSE,
-    taxon_id = 62164,
-
-    # Map Life Stage (term_id = 1)
-    life_stage_val = case_when(
-      life_stage == "adult" & evidence_type == "organism" ~ 2, # Adult
-      life_stage == "nymph/larvae" ~ 6, # Larvae
-      life_stage == "eggs" ~ 7, # Egg
-      TRUE ~ NA_real_
-    ),
-
-    # Map Presence (term_id = 22)
-    presence_val = case_when(
-      evidence_type == "organism" ~ 24, # Organism
-      evidence_type == "nymph-related evidence" ~ 35, # Construction (Caddisfly Case)
-      evidence_type == "nymph to adult exuviae" ~ 28, # Molt
-      TRUE ~ NA_real_
-    )
-  ) |>
-  pivot_longer(
-    cols = c(life_stage_val, presence_val),
-    names_to = "attribute_type",
-    values_to = "controlled_value_id",
-    values_drop_na = TRUE
-  ) |>
-  mutate(
-    controlled_attribute_id = case_when(
-      attribute_type == "life_stage_val" ~ 1,
-      attribute_type == "presence_val" ~ 22
-    )
-  ) |>
-  select(-attribute_type)
+#| label: read-sample-data
+# ETF_EPT_inat_df <- read_csv(here(L301_data_dir, "EPT_sample_data_2026.csv")) |>
+#   slice(6:10) |>
+#   mutate(species = "Ephemeroptera", observation_id = id) |>
+#   mutate(
+#     life_stage = "adult",
+#     evidence_type = "organism"
+#   )
 ```
 
 ```{r}
-#| label: combine-dataset
-final_ann_to_post <- bind_rows(
-  ephemeroptera_df,
-  plecoptera_df,
-  trichoptera_df
-) |>
-  mutate(row_num = row_number(), batch_id = (row_num - 1) %/% 9900)
-rm(ephemeroptera_df, plecoptera_df, trichoptera_df)
-```
-
-
-```{r}
-#| label: save-ann-dataset
-# Empty dataset
-saveRDS(
-  final_ann_to_post,
-  here(L301_data_dir, "301d_ETF_EPT_ANN_api_prep.rds")
-)
-
-# Dataset for upload tracking
-saveRDS(
-  final_ann_to_post,
-  here(L301_data_dir, "301e_ETF_EPT_ANN_api_uploads.rds")
-)
-
-rm(final_ann_to_post)
-```
-
-## Run uploads
-
-```{r}
-#| label: upload-inat-ann
-# Read in unposted observations in the up-to-date dataset
-final_ann_to_post_master <- readRDS(here(
-  L301_data_dir,
-  "301e_ETF_EPT_ANN_api_uploads.rds"
-))
-
-unposted_ann <- final_ann_to_post_master |>
-  filter(posted_to_inat == FALSE)
-
-# Grabs first batch number available
-current_batch_num <- min(unposted_ann$batch_id, na.rm = TRUE)
-
-# Filter to today's uploads
-ann_for_today <- unposted_ann |>
-  filter(batch_id == current_batch_num)
-
-
-# Log start
-annotation_log <- here(L301_data_dir, "301f_ETF_EPT_ANN_api_log.txt")
-
-start_msg <- paste0(
-  Sys.time(),
-  " | Executing upload for Batch ID: ",
-  current_batch_num
-)
-
-message(start_msg)
-write(start_msg, file = annotation_log, append = TRUE)
-
-
-# Run the Annotation loop
-updated_ann <- split(
-  ann_for_today,
-  seq_len(nrow(ann_for_today))
-) |>
-  map_dfr(
-    ~ post_inat_annotation(
-      .x,
-      token = Sys.getenv("INAT_TOKEN"),
-      log_file = annotation_log
-    )
-  )
-
-# Add today's progress back to main dataset:
-reconciled_master <- final_ann_to_post_master |>
-  rows_update(updated_ann, by = "observation_id")
-
-saveRDS(
-  reconciled_master,
-  here(L301_data_dir, "301e_ETF_EPT_ANN_api_uploads.rds")
-)
-
-# Log end
-end_msg <- paste0(
-  Sys.time(),
-  " | Master RDS saved successfully for Batch ID: ",
-  current_batch_num
-)
-
-message(end_msg)
-write(end_msg, file = annotation_log, append = TRUE)
-```
-
-
-```{r}
-#| label: clean-up-env
-rm(
-  final_ann_to_post_master,
-  unposted_ann,
-  current_batch_num,
-  ann_for_today,
-  annotation_log,
-  start_msg,
-  updated_ann,
-  reconciled_master,
-  end_msg
-)
-```
-
-
-
-# Project
-
-[Traditional project on iNaturalist](https://www.inaturalist.org/projects/2025-status-of-eastern-usa-ept) 
-
-This project curates a list of Ephemeroptera, Plecoptera, and Trichoptera observations from 2000-2025 in the EPA Level I ecoregion Eastern Temperate Forests. Observations included in this project are currently being used to study aquatic insects across the Eastern U.S.A as part of my Master's thesis research.
-
-
-```{r}
-#| label: FX-add-project
-post_obs_to_project <- function(row_data, token, log_file, project_id) {
-  url <- "https://api.inaturalist.org/v1/project_observations"
-
-  obs_id <- row_data$observation_id
-
-  body <- list(
-    project_observation = list(
-      observation_id = as.integer(obs_id),
-      project_id = project_id
-    )
-  )
-
-  # Execute request
-  response <- POST(
-    url = url,
-    add_headers(Authorization = paste("Bearer", token)),
-    encode = "json",
-    body = body,
-    user_agent(USER_NAME)
-  )
-
-  if (status_code(response) == 200) {
-    row_data$posted_to_inat <- TRUE
-    log_msg <- paste0(
-      Sys.time(),
-      " | [SUCCESS] Added observation # ",
-      obs_id,
-      " to project: ",
-      project_id
-    )
-  } else {
-    # Attempt to extract error details from the API response
-    error_msg <- tryCatch(
-      {
-        resp_content <- content(response, as = "text", encoding = "UTF-8")
-        parsed <- fromJSON(resp_content)
-        if (!is.null(parsed$error)) {
-          paste(parsed$error, collapse = "; ")
-        } else {
-          paste(parsed$errors, collapse = "; ")
-        }
-      },
-      error = function(e) {
-        paste("HTTP Status Code:", status_code(response))
-      }
-    )
-
-    log_msg <- paste0(
-      Sys.time(),
-      " | [ERROR] Failed to add obs # ",
-      obs_id,
-      " - ERROR: ",
-      error_msg
-    )
-    warning(log_msg)
-  }
-
-  # Append to project tracking log
-  write(log_msg, file = log_file, append = TRUE)
-
-  # Rate limit safety delay
-  Sys.sleep(SLEEP_RATE)
-
-  return(row_data)
-}
-```
-
-```{r}
-#| label: curate-obs-dataset
-final_proj_to_post <- ETF_EPT_inat_df |>
-  mutate(
-    posted_to_inat = FALSE,
-    taxon_id = case_when(
-      species == "Ephemeroptera" ~ 48011,
-      species == "Plecoptera" ~ 47504,
-      species == "Trichoptera" ~ 62164
-    ),
-    row_num = row_number(),
-    batch_id = (row_num - 1) %/% 9900
-  ) |>
-  select(
-    species,
-    observation_id,
-    taxon_id,
-    posted_to_inat,
-    row_num,
-    batch_id
-  ) |>
-  na.omit() |>
-  distinct()
-```
-
-
-
-```{r}
-#| label: save-proj-dataset
-# Empty dataset
-saveRDS(
-  final_proj_to_post,
-  here(L301_data_dir, "301g_ETF_EPT_project_api_prep.rds")
-)
-
-# Dataset for upload tracking
-saveRDS(
-  final_proj_to_post,
-  here(L301_data_dir, "301h_ETF_EPT_project_api_uploads.rds")
-)
-
-rm(final_proj_to_post)
-```
-
-## Run uploads
-
-```{r}
-#| label: upload-inat-proj
-# Read in unposted observations in the up-to-date dataset
-final_proj_to_post_master <- readRDS(here(
-  L301_data_dir,
-  "301h_ETF_EPT_project_api_uploads.rds"
-))
-
-unposted_proj <- final_proj_to_post_master |>
-  filter(posted_to_inat == FALSE)
-
-# Grabs first batch number available
-current_batch_num <- min(unposted_proj$batch_id, na.rm = TRUE)
-
-# Filter to today's uploads
-proj_for_today <- unposted_proj |>
-  filter(batch_id == current_batch_num)
-
-
-# Log start
-project_id <- 300755
-project_log <- here(L301_data_dir, "301i_ETF_EPT_project_api_log.txt")
-
-start_msg <- paste0(
-  Sys.time(),
-  " | Executing upload for Batch ID: ",
-  current_batch_num
-)
-
-message(start_msg)
-write(start_msg, file = project_log, append = TRUE)
-
-
-# Run the project loop
-updated_proj <- split(
-  proj_for_today,
-  seq_len(nrow(proj_for_today))
-) |>
-  map_dfr(
-    ~ post_obs_to_project(
-      row_data = .x,
-      token = Sys.getenv("INAT_TOKEN"),
-      log_file = project_log,
-      project_id = project_id
-    )
-  )
-
-# Add today's progress back to main dataset:
-reconciled_master <- final_proj_to_post_master |>
-  rows_update(updated_project_status, by = "observation_id")
-
-saveRDS(
-  reconciled_master,
-  here(L301_data_dir, "301h_ETF_EPT_project_api_uploads.rds")
-)
-
-# Log end
-end_msg <- paste0(
-  Sys.time(),
-  " | Master RDS saved successfully for Batch ID: ",
-  current_batch_num
-)
-
-message(end_msg)
-write(end_msg, file = project_log, append = TRUE)
-```
-
-```{r}
-#| label: clean-up-env
-rm(
-  final_proj_to_post_master,
-  unposted_proj,
-  current_batch_num,
-  proj_for_today,
-  project_log,
-  start_msg,
-  updated_proj,
-  reconciled_master,
-  end_msg
-)
-```
-
-
-# legacy code
-
-
-```{r}
-#| label: compile-list
-# Compile list of batches to complete
-batches_list <- bind_rows(
-  "identifications" = final_ids_to_post |> select(batch_id),
-  "annotations" = final_ann_to_post |> select(batch_id),
-  "project_observations" = final_proj_to_post |> select(batch_id),
-  .id = "contribution_type"
-) |>
-  distinct()
-
-print(batches_list, n = 30)
-```
-
-```{r}
-#| label: other
-h <- ETF_EPT_metadata_df |>
-  filter(life_stage == "nymph/larvae") |>
-  select(annotations)
-
-a <- ETF_EPT_metadata_df |>
-  filter(life_stage == "adult") |>
-  select(annotations)
-
-
-h %>%
-  mutate(has_nested_data = map_lgl(annotations, ~ nrow(.x) > 0)) %>%
-  count(has_nested_data)
-
-a %>%
-  mutate(has_nested_data = map_lgl(annotations, ~ nrow(.x) > 0)) %>%
-  count(has_nested_data)
+#| label: upload-inat-ids
+# # Read in unposted observations in the up-to-date dataset
+# final_ids_to_post_master <- readRDS(here(
+#   L301_data_dir,
+#   "301b_ETF_EPT_IDS_api_uploads.rds"
+# ))
+
+# unposted_ids <- final_ids_to_post_master |>
+#   filter(posted_to_inat == FALSE)
+
+# # Grabs first batch number available
+# current_batch_num <- min(unposted_ids$batch_id, na.rm = TRUE)
+
+# # Filter to today's uploads
+# ids_for_today <- unposted_ids |>
+#   filter(batch_id == current_batch_num)
+
+# # Log start
+# identification_log <- here(L301_data_dir, "301c_ETF_EPT_IDS_api_log.txt")
+
+# start_msg <- paste0(
+#   Sys.time(),
+#   " | Executing upload for Batch ID: ",
+#   current_batch_num
+# )
+
+# message(start_msg)
+# write(start_msg, file = identification_log, append = TRUE)
+
+# # Run the ID loop
+# updated_ids <- split(ids_for_today, seq_len(nrow(ids_for_today))) |>
+#   map_dfr(
+#     ~ post_inat_id(
+#       .x,
+#       token = Sys.getenv("INAT_TOKEN"),
+#       log_file = identification_log
+#     )
+#   )
+
+# # Add today's progress back to main dataset:
+# reconciled_master <- final_ids_to_post_master |>
+#   rows_update(updated_ids, by = "observation_id")
+
+# saveRDS(
+#   reconciled_master,
+#   here(L301_data_dir, "301b_ETF_EPT_IDS_api_uploads.rds")
+# )
+
+# # Log end
+# end_msg <- paste0(
+#   Sys.time(),
+#   " | Master RDS saved successfully for Batch ID: ",
+#   current_batch_num
+# )
+
+# message(end_msg)
+# write(end_msg, file = identification_log, append = TRUE)
 ```
