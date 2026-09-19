@@ -10,7 +10,7 @@ format:
   html:
     embed-resources: true
 abstract: This script prepares a dataset of IDs and annotations to add to iNaturalist.
-date: 2026-09-13 # last modified
+date: 2026-09-19 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -375,10 +375,10 @@ Recover IDs not added to main dataset if error occurs
 
 ```{r}
 #| label: recover-ids
-# 1. Read log lines
+# Read log lines
 log_lines <- readLines(here(L301_data_dir, "301c_ETF_EPT_IDS_api_log.txt"))
 
-# 2. Filter for success lines and extract the observation numbers
+# Filter for success lines and extract the observation numbers
 # Matches lines like: "... | Added ID (Taxon: 48011) to observation # 12345678"
 successful_obs_ids <- log_lines |>
   keep(~ str_detect(.x, "Added ID")) |>
@@ -386,13 +386,13 @@ successful_obs_ids <- log_lines |>
   str_remove("observation # ") |>
   as.numeric()
 
-# 3. Read your existing master tracking dataset
+# Read master tracking dataset
 final_ids_to_post_master <- readRDS(here(
   L301_data_dir,
   "301b_ETF_EPT_IDS_api_uploads.rds"
 ))
 
-# 4. Mark posted_to_inat as TRUE for all successfully logged observation IDs
+# Mark posted_to_inat as TRUE for all successfully logged observation IDs
 reconciled_ids_master <- final_ids_to_post_master |>
   mutate(
     posted_to_inat = if_else(
@@ -414,7 +414,7 @@ cat(
   "\n"
 )
 
-# 5. Overwrite the saved RDS file with the updated status
+# Overwrite the saved RDS file with the updated status
 saveRDS(
   reconciled_ids_master,
   here(L301_data_dir, "301b_ETF_EPT_IDS_api_uploads.rds")
@@ -1013,7 +1013,7 @@ rm(
 ```
 
 
-# other
+# legacy code
 
 
 ```{r}

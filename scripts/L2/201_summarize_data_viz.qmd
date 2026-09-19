@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script creates visualizations of my final data used for modelling and analyses.
-date: 2026-09-15 # last modified
+date: 2026-09-19 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -19,8 +19,8 @@ date-format: "yyyy-MM-dd"
 
 ```{r}
 #| label: setup-env
-install.packages("pak")
-pak::pkg_install("ropensci/rnaturalearthhires")
+# install.packages("pak")
+# pak::pkg_install("ropensci/rnaturalearthhires")
 
 # Load in packages
 if (!require("pacman")) {
