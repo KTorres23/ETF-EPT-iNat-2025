@@ -833,9 +833,7 @@ upd_reject_data <- reject_data |>
   mutate(
     obs_issues = case_when(
       !is.na(odd_cases) & !str_detect(odd_cases, "suspended") ~ "other",
-      str_detect(obs_issues, "copyrighted") ~ "other",
-      str_detect(obs_issues, "unsure of ID") ~ "uncertain ID",
-      str_detect(obs_issues, "incorrect") ~ "incorrect order ID",
+      str_detect(obs_issues, "copyright") ~ "other",
       .default = obs_issues
     )
   ) |>

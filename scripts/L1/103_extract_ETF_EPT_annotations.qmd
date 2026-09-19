@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script curates labels annotated from the previous script.
-date: 2026-09-15 # last modified
+date: 2026-09-19 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -188,7 +188,10 @@ tidy_data <- parsed_data |>
   rename(
     label_juvenile = `label_nymph/larva`,
     label_net_container = `label_net/container`,
-    flower_associate = notes_flower,
+    interaction_fungus_parasitism = notes_fungus,
+    interaction_predation = notes_predation,
+    interaction_reproduction = notes_mating,
+    interaction_flower = notes_flower,
     fave_image = notes_fave,
     cannot_identify = `label_can't_id`,
     human_present = label_hand,
@@ -207,44 +210,36 @@ tidy_data <- parsed_data |>
   mutate(
     # Create evidence_type column
     evidence_type = case_when(
-      label_adult & label_evidence ~ "nymph to adult exuviae",
-      label_juvenile & label_evidence ~ "nymph-related evidence", # nymphal molt or case
-      label_evidence ~ "eggs",
-      TRUE ~ "organism"
+      label_adult & label_evidence ~ "Nymph to adult exuviae",
+      label_juvenile & label_evidence ~ "Nymph-related evidence", # nymphal molt or case
+      label_evidence ~ "Eggs",
+      TRUE ~ "Organism"
     ),
 
     # Create life_stage column
     life_stage = case_when(
-      label_adult ~ "adult",
-      label_juvenile ~ "immature",
-      (notes_egg | notes_eggs) & label_evidence ~ "eggs",
-      TRUE ~ NA_character_
-    ),
-
-    # Create interaction column
-    spp_interaction = case_when(
-      notes_fungus ~ "fungus parasitism",
-      notes_predation ~ "predation",
-      notes_mating ~ "reproduction",
+      label_adult ~ "Adult",
+      label_juvenile ~ "Immature",
+      (notes_egg | notes_eggs) & label_evidence ~ "Eggs",
       TRUE ~ NA_character_
     ),
 
     # Create collection technique column
     collection_technique = case_when(
-      label_net_container ~ "in a net/container",
-      label_microscope ~ "under microscope",
-      label_light_trap | notes_light_trap ~ "from light trap",
-      TRUE ~ NA_character_ # no particular technique
+      label_net_container ~ "In net or container",
+      label_microscope ~ "Under microscope",
+      label_light_trap | notes_light_trap ~ "From light trap",
+      TRUE ~ "No technique" # no particular technique
     ),
 
     # Create observation issues column
     obs_issues = case_when(
-      missing_image ~ "missing image",
-      duplicate ~ "duplicate image",
-      species_id_unsure ~ "unsure of ID",
-      notes_copyright ~ "copyrighted image",
-      !is.na(species_id_corrected) ~ "incorrect species ID",
-      TRUE ~ NA_character_ # other issue
+      missing_image ~ "Missing image",
+      duplicate ~ "Duplicate image",
+      species_id_unsure ~ "Uncertain ID",
+      notes_copyright ~ "Copyright image",
+      !is.na(species_id_corrected) ~ "Incorrect order-level ID",
+      TRUE ~ NA_character_ # no issue
     )
   ) |>
   # Remove unncessary columns
@@ -253,9 +248,6 @@ tidy_data <- parsed_data |>
       label_evidence,
       label_adult,
       label_juvenile,
-      notes_fungus,
-      notes_predation,
-      notes_mating,
       label_net_container,
       label_microscope,
       missing_image,
@@ -276,8 +268,7 @@ tidy_data <- parsed_data |>
       human_present,
       collection_technique,
       preserved_specimen,
-      spp_interaction,
-      flower_associate
+      contains("interaction")
     ),
     .after = observation_id
   ) |>
@@ -286,7 +277,7 @@ tidy_data <- parsed_data |>
       cannot_identify,
       inat_id_corrected,
       obs_issues,
-      species_id_corrected,
+      order_id_corrected = species_id_corrected,
     ),
     .after = last_col()
   )
@@ -298,26 +289,28 @@ tidy_data <- parsed_data |>
 
 Description of each column in the `tidy_data` dataset, which is divided into smaller datasets in the [finalize-datasets section](#finalize-datasets).
 
-For `cannot_identify` and `species_id_corrected`, observations were moved to a higher taxon (e.g., Pterygota) if no diagnostic characters of the three EPT orders were present. This was usually caused by low image resolution (far away shot, blurry image), and rarely caused by my uncertainty of the labelled organism
+For `cannot_identify` and `order_id_corrected`, observations were moved to a higher taxon (e.g., Pterygota) if no diagnostic characters of the three EPT orders were present. This was usually caused by low image resolution (far away shot, blurry image), and rarely caused by my uncertainty of the labelled organism
 
 | Column number | Column name | Column description | Values | Column data class | 
 | --- | --- | --- | --- | --- |
 | [1] | `species` | Insect order | `Ephemeroptera`, `Plecoptera`, or `Trichoptera` | string |
 | [2] | `observation_id` | Observation ID number on iNaturalist | eg., `12345` | double |
-| [3] | `life_stage` | Life stage of organism contained in observation images | `adult`, `immature`, `eggs` | string |
-| [4] | `evidence_type` | Type of evidence in image | `nymph to adult exuviae`, `nymph-related evidence`, `NA` [NA = actual organism probably] | string |
+| [3] | `life_stage` | Life stage of organism contained in observation images | `Adult`, `Immature`, `Eggs` | string |
+| [4] | `evidence_type` | Type of evidence in image | `Nymph to adult exuviae`, `Nymph-related evidence`, `Eggs`, `Organism` | string |
 | [5] | `multiple_specimen_present` | Multiple specimen of the same insect order of the observation present | `TRUE`, `FALSE` | logical | 
 | [6] | `human_present` | presence of human skin, hands, fingers, body, etc. in observation image(s) | `TRUE`, `FALSE` | logical | 
-| [7] | `collection_technique` | Technique used to collect organism in the observation | `in a net/container`, `under microscope`, `from light trap`, `NA` [NA = no techniques observed, may be wild/artificial background] | string |
+| [7] | `collection_technique` | Technique used to collect organism in the observation | `In a net or container`, `Under microscope`, `From light trap`, `No technique` [may be wild/artificial background] | string |
 | [8] | `preserved_specimen` | dead specimen under microscope or in container, may be pinned | `TRUE`, `FALSE` | logical | 
-| [9] | `spp_interaction` | Species interaction involving the organism in the observation | `fungus parasitism`, `predation`, `reproduction`, `NA` [NA = no interactions observed] | string | 
-| [10] | `flower_associate` | Presence of organism on flower(s) | `TRUE`, `FALSE` | logical |
-| [11] | `odd_cases` | Other notes indicating other potentially valuable or interesting information within images | x | string |
-| [12] | `fave_image` | Favorite images or observations to use for research communication & visualization purposes | `TRUE`, `FALSE` | logical | 
-| [13] | `cannot_identify` | could not identify to an EPT order for some reason described column `obs_issues` | `TRUE`, `FALSE` | logical | 
-| [14] | `inat_id_corrected` | ID corrected/updated on iNaturalist | `TRUE`, `FALSE` | logical | 
-| [15] | `obs_issues` | reason for an image not being annotated or being unable to annotate | `missing image` (no image was downloaded due to CC rights (see 101_get_EPT_images.qmd for more info)), `duplicate image` (observation image is visually duplicate to another observation), `unsure of ID` (unsure whether observation is EPT due to image resolution or lack of diagnostic characters), `copyrighted image` (image has copyright issues identified by me), `incorrect species ID` (species identification is incorrect), `NA` [NA = no issues with observation] | string | 
-| [16] | `species_id_corrected` | the corrected identification of the organism in the image | e.g., `Pterygota` | string | 
+| [9] | `interaction_predation` | Predation interaction involving the organism in the observation | `TRUE`, `FALSE` | logical |
+| [10] | `interaction_flower` | Association interaction involving the organism in the observation (presence of organism on flower(s)) | `TRUE`, `FALSE` | logical |
+| [11] | `interaction_reproduction` | Reproduction interaction involving the organism in the observation | `TRUE`, `FALSE` | logical |
+| [12] | `interaction_fungus_parasitism` | Fungus parasitism interaction involving the organism in the observation | `TRUE`, `FALSE` | logical |
+| [13] | `odd_cases` | Other notes indicating other potentially valuable or interesting information within images | x | string |
+| [14] | `fave_image` | Favorite images or observations to use for research communication & visualization purposes | `TRUE`, `FALSE` | logical | 
+| [15] | `cannot_identify` | could not identify to an EPT order for some reason described column `obs_issues` | `TRUE`, `FALSE` | logical | 
+| [16] | `inat_id_corrected` | ID corrected/updated on iNaturalist | `TRUE`, `FALSE` | logical | 
+| [17] | `obs_issues` | reason for an image not being annotated or being unable to annotate | `Missing image` (no image was downloaded due to CC rights (see 101_get_EPT_images.qmd for more info)), `Duplicate image` (observation image is visually duplicate to another observation), `Uncertain ID` (unsure whether observation is EPT due to image resolution or lack of diagnostic characters), `Copyright image` (image has copyright issues identified by me), `Incorrect order-level ID` (order-level identification is incorrect), `NA` [NA = no issues with observation] | string | 
+| [18] | `order_id_corrected` | the corrected identification of the organism in the image | e.g., `Pterygota` | string | 
 
 
 
@@ -327,7 +320,7 @@ For `cannot_identify` and `species_id_corrected`, observations were moved to a h
 #| label: make-final-dataset
 final_data <- tidy_data |>
   filter(cannot_identify == FALSE & is.na(obs_issues)) |>
-  select(-cannot_identify:-species_id_corrected)
+  select(-cannot_identify:-order_id_corrected)
 ```
 
 ```{r}
@@ -337,7 +330,7 @@ reject_data <- tidy_data |>
   # These records were NOT annotated with information,
   # since I assumed I wouldn't use them for analyses.
   # I removed the empty annotation-related columns
-  select(species, observation_id, odd_cases:species_id_corrected)
+  select(species, observation_id, odd_cases:order_id_corrected)
 ```
 
 ```{r}
