@@ -10,11 +10,9 @@ format:
   html:
     embed-resources: true
 abstract: This script retrieves observation information for aquatic insect taxon from the iNaturalist API
-date: 2026-09-01 # last modified
+date: 2026-09-19 # last modified
 date-format: "yyyy-MM-dd"
 ---
-
-This grabs data
 
 Last data pull initated on 9/1/2026
 
@@ -86,7 +84,7 @@ cat(sprintf(
   length(target_ids),
   total_batches
 ))
-# 2. Retrieve data in batches
+# Retrieve data in batches
 for (i in seq_along(id_chunks)) {
   current_ids <- id_chunks[[i]]
   id_param <- paste(current_ids, collapse = ",")
@@ -142,7 +140,7 @@ for (i in seq_along(id_chunks)) {
   Sys.sleep(1.2)
 }
 
-# 3. Combine all batches into the final data frame
+# Combine all batches into the final data frame
 final_obs_df <- as.data.frame(rbindlist(
   batch_list,
   fill = TRUE,
