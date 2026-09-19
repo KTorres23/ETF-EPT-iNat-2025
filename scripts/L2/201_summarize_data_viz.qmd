@@ -99,22 +99,22 @@ custom_colors <- c(
   # --- Quality Grade
   # --- Ring 3: Quality Grade (Outer Ring)
   # Ephemeroptera
-  "Ephemeroptera - Adult - RG" = "#6BAED6", # Matches Adult Blue
-  "Ephemeroptera - Adult - Needs ID" = "#D9D9D9", # Lighter Gray
-  "Ephemeroptera - Immature - RG" = "#9ECAE1", # Matches Immature Blue
-  "Ephemeroptera - Immature - Needs ID" = "#EBEBEB", # Softest Light Gray
+  "Ephemeroptera - Research" = "#6BAED6", # Matches Adult Blue
+  "Ephemeroptera - Needs ID" = "#D9D9D9", # Lighter Gray
+  # "Ephemeroptera - Immature - RG" = "#9ECAE1", # Matches Immature Blue
+  # "Ephemeroptera - Immature - Needs ID" = "#EBEBEB", # Softest Light Gray
 
   # Plecoptera
-  "Plecoptera - Adult - RG" = "#74C476", # Matches Adult Green
-  "Plecoptera - Adult - Needs ID" = "#D9D9D9", # Lighter Gray
-  "Plecoptera - Immature - RG" = "#A1D99B", # Matches Immature Green
-  "Plecoptera - Immature - Needs ID" = "#EBEBEB", # Softest Light Gray
+  "Plecoptera - Research" = "#74C476", # Matches Adult Green
+  "Plecoptera - Needs ID" = "#D9D9D9", # Lighter Gray
+  # "Plecoptera - Immature - RG" = "#A1D99B", # Matches Immature Green
+  # "Plecoptera - Immature - Needs ID" = "#EBEBEB", # Softest Light Gray
 
   # Trichoptera
-  "Trichoptera - Adult - RG" = "#FDAE6B", # Matches Adult Orange
-  "Trichoptera - Adult - Needs ID" = "#D9D9D9", # Lighter Gray
-  "Trichoptera - Immature - RG" = "#FDBB84", # Matches Immature Orange
-  "Trichoptera - Immature - Needs ID" = "#EBEBEB" # Softest Light Gray
+  "Trichoptera - Research" = "#FDAE6B", # Matches Adult Orange
+  "Trichoptera - Needs ID" = "#D9D9D9" # Lighter Gray
+  # "Trichoptera - Immature - RG" = "#FDBB84", # Matches Immature Orange
+  # "Trichoptera - Immature - Needs ID" = "#EBEBEB" # Softest Light Gray
 )
 ```
 
@@ -396,8 +396,8 @@ rm(
 
 ```{r}
 #| label: prep-research-grade
-ETF_EPT_obs_status <- final_ETF_EPT_metadata |>
-  filter_out(life_stage == "eggs") |>
+base_reference <- final_ETF_EPT_metadata |>
+  dplyr::filter_out(life_stage == "eggs") |>
   mutate(
     species = str_trim(species),
     life_stage = str_to_title(life_stage),
@@ -408,9 +408,11 @@ ETF_EPT_obs_status <- final_ETF_EPT_metadata |>
     quality_grade = fct_recode(
       quality_grade,
       "Needs ID" = "needs_id",
-      "RG" = "research"
+      "Research" = "research"
     )
-  ) |>
+  )
+
+ETF_EPT_obs_status <- base_reference |>
   group_by(species, life_stage, quality_grade) |>
   summarize(num_obs_stage_grade = n(), .groups = "drop") |>
   group_by(species, life_stage) |>
@@ -441,6 +443,43 @@ ETF_EPT_obs_status <- final_ETF_EPT_metadata |>
     grade_fill_key = paste(species, life_stage, quality_grade, sep = " - ")
   ) |>
   arrange(species, life_stage, quality_grade)
+
+species_summary <- base_reference |>
+  count(species, name = "num_obs_spp") |>
+  mutate(
+    prop_species = num_obs_spp / sum(num_obs_spp),
+    taxa_label = paste0(
+      species,
+      "\n",
+      str_trim(format(as.numeric(num_obs_spp), big.mark = ","))
+    )
+  )
+
+lifestage_summary <- base_reference |>
+  count(species, life_stage, name = "num_obs_stage") |>
+  mutate(
+    prop_ls = num_obs_stage / sum(num_obs_stage),
+    ls_label = paste0(
+      life_stage,
+      "\n",
+      str_trim(format(as.numeric(num_obs_stage), big.mark = ","))
+    ),
+    ls_fill_key = paste(species, life_stage, sep = " - ")
+  ) |>
+  arrange(species, life_stage)
+
+grade_summary <- base_reference |>
+  count(species, quality_grade, name = "num_obs_grade") |>
+  mutate(
+    prop_grade = num_obs_grade / sum(num_obs_grade),
+    grade_label = paste0(
+      quality_grade,
+      "\n",
+      str_trim(format(as.numeric(num_obs_grade), big.mark = ","))
+    ),
+    grade_fill_key = paste(species, quality_grade, sep = " - ")
+  ) |>
+  arrange(species, quality_grade)
 ```
 
 ```{r}
@@ -467,43 +506,33 @@ ETF_EPT_ann_count <- final_ETF_EPT_metadata |>
 
 ```{r}
 #| label: figure1-rg-sunburst
-# Inner Ring Summary (Species)
-species_summary <- ETF_EPT_obs_status |>
-  group_by(species, taxa_label) |>
-  summarise(prop_species = sum(prop), .groups = "drop")
+## Fig 1a - Species + life stage
 
-# Middle Ring Summary (Life Stage)
-lifestage_summary <- ETF_EPT_obs_status |>
-  group_by(species, life_stage, ls_fill_key, ls_label) |>
-  summarise(prop_ls = sum(prop), .groups = "drop")
-
-
-# Create plot
-figure1 <- ggplot(ETF_EPT_obs_status, aes(y = prop)) +
-  # Ring 1: Species
+p_lifestage <- ggplot() +
+  # Ring 1: Species (Center)
   geom_bar(
     data = species_summary,
-    aes(x = 0.8, y = prop_species, fill = species),
+    aes(x = 1, y = prop_species, fill = species),
     stat = "identity",
-    width = 1.6,
+    width = 1.4,
     position = "stack",
     color = "white"
   ) +
   geom_text(
     data = species_summary,
-    aes(x = 0.8, y = prop_species, label = taxa_label, group = species),
+    aes(x = 0.9, y = prop_species, label = taxa_label, group = species),
     position = position_stack(vjust = 0.5),
-    size = 4.2,
+    size = 6,
+    lineheight = 0.85,
     color = "white",
     fontface = "bold"
   ) +
-
-  # Ring 2: life stage
+  # Ring 2: Life Stage (Outer)
   geom_bar(
     data = lifestage_summary,
     aes(x = 2, y = prop_ls, fill = ls_fill_key),
     stat = "identity",
-    width = 0.8,
+    width = 0.5,
     position = "stack",
     color = "white"
   ) +
@@ -511,38 +540,77 @@ figure1 <- ggplot(ETF_EPT_obs_status, aes(y = prop)) +
     data = lifestage_summary,
     aes(x = 2, y = prop_ls, label = ls_label, group = ls_fill_key),
     position = position_stack(vjust = 0.5),
-    size = 3.8,
+    size = 5,
+    lineheight = 0.85,
     color = "black"
   ) +
+  scale_fill_manual(values = custom_colors) +
+  coord_polar(theta = "y", clip = "off") +
+  xlim(0, 2.6) +
+  labs(title = "A. Life Stage") +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, vjust = -8, face = "bold", size = 24)
+  )
+p_lifestage
 
-  # Ring 3: grade status
+### Fig 1b Species + Quality grade
+
+p_grade <- ggplot() +
+  # Ring 1: Species (Center)
   geom_bar(
-    aes(x = 2.8, y = prop, fill = grade_fill_key),
+    data = species_summary,
+    aes(x = 1, y = prop_species, fill = species),
     stat = "identity",
-    width = 0.8,
+    width = 1.4,
     position = "stack",
     color = "white"
   ) +
   geom_text(
-    aes(x = 3.6, y = prop, label = grade_label, group = grade_fill_key),
+    data = species_summary,
+    aes(x = 0.9, y = prop_species, label = taxa_label, group = species),
     position = position_stack(vjust = 0.5),
-    size = 3.2,
+    size = 6,
+    lineheight = 0.85,
+    color = "white",
+    fontface = "bold"
+  ) +
+  # Ring 2: Quality Grade (Outer)
+  geom_bar(
+    data = grade_summary,
+    aes(x = 2, y = prop_grade, fill = grade_fill_key),
+    stat = "identity",
+    width = 0.5,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    data = grade_summary,
+    aes(x = 2, y = prop_grade, label = grade_label, group = grade_fill_key),
+    position = position_stack(vjust = 0.5),
+    size = 5,
+    lineheight = 0.85,
     color = "black"
   ) +
-
   scale_fill_manual(values = custom_colors) +
   coord_polar(theta = "y", clip = "off") +
-  xlim(-0.2, 4.2) +
+  xlim(0, 2.6) +
+  labs(title = "B. Observation Quality") +
   theme_void() +
   theme(
-    strip.text = element_text(size = 12, face = "bold"),
     legend.position = "none",
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-  ) +
-  labs(
-    title = "Distribution of Quality-Grade Observation Data Across iNaturalist Data, Taxa, and Life Stage"
+    plot.title = element_text(hjust = 0.5, vjust = -8, face = "bold", size = 24)
   )
 
+p_grade
+```
+
+```{r}
+#| label: figure1-export
+# Combine figure panels
+figure1 <- p_lifestage + p_grade
+figure1
 
 ggsave(
   filename = here(
@@ -551,7 +619,7 @@ ggsave(
   ),
   plot = figure1,
   width = 16,
-  height = 10,
+  height = 8,
   units = "in",
   dpi = 300,
   bg = "white"
@@ -756,12 +824,12 @@ print(prop_in_study) # 12.95%
 #| label: summarize-grade
 # Not research grade
 not_rg <- ETF_EPT_obs_status |>
-  filter(quality_grade != "RG") |>
+  dplyr::filter(quality_grade != "Research") |>
   summarize(not_rg = sum(num_obs_stage_grade)) |>
   pull()
 
 prop_not_rg <- not_rg / num_obs_study * 100
-print(prop_not_rg) #91.28%
+print(prop_not_rg) #91.32%
 ```
 
 ```{r}
@@ -822,13 +890,14 @@ print(prop_adult) #89.57%
 
 ```{r}
 #| label: read-data
-reject_data <- read_rds(here(L1_data_dir, "103b_ETF_EPT_reject_annotated.rds"))
+# skip ahead to grab from L4 directory
+reject_data <- read_rds(here("data", "L4", "excluded-observations.rds"))
 
-final_data <- read_rds(here(L1_data_dir, "103a_ETF_EPT_final_annotated.rds"))
+final_data <- read_rds(here("data", "L4", "ETF-EPT-iNat-2025.rds"))
 ```
 
 ```{r}
-#| label: figure5a-excluded-data
+#| label: figure2a-excluded-data
 upd_reject_data <- reject_data |>
   mutate(
     obs_issues = case_when(
@@ -881,7 +950,7 @@ nrow(reject_data) / nrow(final_data) * 100 # only 0.47% of dataset was excluded
 ```
 
 ```{r}
-#| label: figure5b-num-ids-stacked
+#| label: figure2b-num-ids-stacked
 combined_ids <- ETF_EPT_ids_count |>
   mutate(
     # Cap values at 5
@@ -924,7 +993,7 @@ stacked_ids_plot
 ```
 
 ```{r}
-#| label: figure5-stacked
+#| label: figure2-stacked
 figure2 <- excluded_plot | stacked_ids_plot
 
 ggsave(
