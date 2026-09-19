@@ -621,7 +621,7 @@ figure4
 ggsave(
   filename = here(
     L3_data_dir,
-    "303_Fig4_change_in_ids.png"
+    "303_figure4_change_in_ids.png"
   ),
   plot = figure4,
   width = 16,
