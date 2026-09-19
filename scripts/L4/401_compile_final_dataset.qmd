@@ -1,0 +1,60 @@
+---
+title: 401_compile_final_dataset.qmd
+subtitle: ETF-EPT-iNat-2025 Data description
+author: 
+    - name: Karina Torres
+      role: Author
+      affiliation: Southern Illinois University
+      url: github.com/KTorres23
+toc: true
+format:
+  html:
+    embed-resources: true
+abstract: This script compiles the final ETF-EPT-iNat-2025 dataset
+date: 2026-09-19 # last modified
+date-format: "yyyy-MM-dd"
+---
+
+
+```{r}
+#| label: setup-env
+# Load in packages
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(tidyverse, here)
+
+# Set working directory
+here::i_am("scripts/L4/401_compile_final_dataset.qmd")
+
+# Point to directories
+L0_data_dir <- here("data", "L0") # L0 data
+L1_data_dir <- here("data", "L1") # L1 data
+L2_data_dir <- here("data", "L2") # L2 data
+L3_data_dir <- here("data", "L3") # L3 data
+L4_data_dir <- here("data", "L4") # L4 data
+```
+
+```{r}
+#| label: read-data
+reject_data <- read_rds(here(L1_data_dir, "103b_ETF_EPT_reject_annotated.rds"))
+
+final_data <- read_rds(here(L1_data_dir, "103a_ETF_EPT_final_annotated.rds"))
+```
+
+
+TODO:
+
+* exclude observation 8413237
+  * found to be Plecoptera, not Ephemeroptera during 303 validation script
+* finalize metadata and dataset structure
+
+
+# Finalize datasets
+
+# Metadata description
+
+# Export datasets
+
+
+
