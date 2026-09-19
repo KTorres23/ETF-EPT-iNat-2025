@@ -10,7 +10,7 @@ toc: true
 format:
   html:
     embed-resources: true
-abstract: This script compiles the final ETF-EPT-iNat-2025 dataset
+abstract: This script compiles the final ETF-EPT-iNat-2025 dataset, metadata, and excluded-observations dataset
 date: 2026-09-19 # last modified
 date-format: "yyyy-MM-dd"
 ---
@@ -33,28 +33,243 @@ L1_data_dir <- here("data", "L1") # L1 data
 L2_data_dir <- here("data", "L2") # L2 data
 L3_data_dir <- here("data", "L3") # L3 data
 L4_data_dir <- here("data", "L4") # L4 data
+fs::dir_create(L4_data_dir)
 ```
 
 ```{r}
 #| label: read-data
 reject_data <- read_rds(here(L1_data_dir, "103b_ETF_EPT_reject_annotated.rds"))
-
 final_data <- read_rds(here(L1_data_dir, "103a_ETF_EPT_final_annotated.rds"))
 ```
 
 
-TODO:
-
-* exclude observation 8413237
-  * found to be Plecoptera, not Ephemeroptera during 303 validation script
-* finalize metadata and dataset structure
-
-
 # Finalize datasets
 
-# Metadata description
+## ETF-EPT-iNat-2025 Dataset
+
+```{r}
+#| label: finalize-etf-ept-inat-2025
+ETF_EPT_iNat_2025 <- final_data |>
+  # Clean up observation data
+  rename(taxon_order_id = species) |>
+  mutate(
+    inaturalist_url = paste0(
+      "https://www.inaturalist.org/observations/",
+      observation_id
+    )
+  ) |>
+  relocate(inaturalist_url, .after = observation_id) |>
+  # Add in iNaturalist metadata
+  left_join(
+    read_rds(here(
+      L1_data_dir,
+      "101a_images_clean_ETF_EPT_obs.rds"
+    )),
+    join_by(observation_id == id)
+  ) |>
+  select(
+    # Keep observation & annotation data
+    taxon_order_id:fave_image,
+    # Grab extra iNat metadata
+    lat,
+    long,
+    quality_grade,
+    observed_date = observed_on_details.date,
+    uuid,
+    license_code,
+    observer_id = user.id
+  )
+
+### Pull out observation 8413237
+# During 303 validation script, this observation was incorrectly identified
+# as Ephemeroptera, instead of Plecoptera
+incorrect_obs <- ETF_EPT_iNat_2025 |> filter(observation_id == 8413237)
+
+# Final dataset
+ETF_EPT_iNat_2025 <- ETF_EPT_iNat_2025 |> filter_out(observation_id == 8413237)
+```
+
+
+```{r}
+#| label: finalize-etf-ept-inat-2025-image-metadata
+ETF_EPT_iNat_2025_images_meta <- ETF_EPT_iNat_2025 |>
+  select(taxon_order_id:inaturalist_url) |>
+  left_join(
+    read_csv(here(L1_data_dir, "101b_images_metadata_ETF_EPT.csv")),
+    join_by(observation_id == id)
+  ) |>
+  select(-species_label, -save_dir) |>
+  rename(aws_image_url = clean_url) |>
+  mutate(image_id = as.double(str_extract(img_name, "(?<=img)\\d+"))) |>
+  relocate(image_id, .after = inaturalist_url)
+```
+
+## Excluded-Observations Dataset
+
+```{r}
+#| label: finalize-excluded-observations
+excluded_observations <- reject_data |>
+  rename(taxon_order_id = species) |>
+  mutate(
+    inaturalist_url = paste0(
+      "https://www.inaturalist.org/observations/",
+      observation_id
+    )
+  ) |>
+  relocate(inaturalist_url, .after = observation_id) |>
+  # Add in iNaturalist metadata
+  left_join(
+    read_rds(here(
+      L1_data_dir,
+      "101a_images_clean_ETF_EPT_obs.rds"
+    )),
+    join_by(observation_id == id)
+  ) |>
+  select(
+    # Keep observation data
+    taxon_order_id:order_id_corrected,
+    # Grab extra iNat metadata
+    lat,
+    long,
+    quality_grade,
+    observed_date = observed_on_details.date,
+    uuid,
+    license_code,
+    observer_id = user.id
+  )
+
+### Add in observation 8413237
+# During 303 validation script, this observation was incorrectly identified
+# as Ephemeroptera, instead of Plecoptera
+incorrect_obs_to_add <- incorrect_obs |>
+  select(
+    taxon_order_id:inaturalist_url,
+    odd_cases,
+    fave_image,
+    lat:observer_id
+  ) |>
+  # Add information about incorrect ID
+  mutate(
+    cannot_identify = TRUE,
+    inat_id_corrected = TRUE,
+    obs_issues = "Incorrect order-level ID",
+    order_id_corrected = "Plecoptera"
+  )
+
+# Final dataset
+excluded_observations <- bind_rows(excluded_observations, incorrect_obs_to_add)
+```
+
+```{r}
+#| label: finalize-excluded-observations-image-metadata
+excluded_observations_images_meta <- excluded_observations |>
+  select(taxon_order_id:inaturalist_url) |>
+  left_join(
+    read_csv(here(L1_data_dir, "101b_images_metadata_ETF_EPT.csv")),
+    join_by(observation_id == id)
+  ) |>
+  select(-species_label, -save_dir) |>
+  rename(aws_image_url = clean_url) |>
+  mutate(image_id = as.double(str_extract(img_name, "(?<=img)\\d+"))) |>
+  relocate(image_id, .after = inaturalist_url)
+```
+
+
+# Metadata descriptions
+
+## ETF-EPT-iNat-2025 Dataset
+
+| Column number | Column name | Column description | Values | Column data class | 
+| --- | --- | --- | --- | --- |
+| [1] | `taxon_order_id` | Aquatic insect order identification | `Ephemeroptera`, `Plecoptera`, or `Trichoptera` | string |
+| [2] | `observation_id` | Observation ID number on iNaturalist | eg., `12345` | double |
+| [3] | `inaturalist_url` | URL to access observation on the iNaturalist platform | e.g., `https://www.inaturalist.org/observations/12345` | string |
+| [4] | `life_stage` | Life stage of organism contained in observation images | `Adult`, `Immature`, `Eggs` | string |
+| [5] | `evidence_type` | Type of evidence in image | `Nymph to adult exuviae`, `Nymph-related evidence`, `Eggs`, `Organism` | string |
+| [6] | `multiple_specimen_present` | Multiple specimen of the same insect order of the observation present | `TRUE`, `FALSE` | logical | 
+| [7] | `human_present` | presence of human skin, hands, fingers, body, etc. in observation image(s) | `TRUE`, `FALSE` | logical | 
+| [8] | `collection_technique` | Technique used to collect organism in the observation | `In a net or container`, `Under microscope`, `From light trap`, `No technique` [may be wild/artificial background] | string |
+| [9] | `preserved_specimen` | dead specimen under microscope or in container, may be pinned | `TRUE`, `FALSE` | logical | 
+| [10] | `interaction_predation` | Predation interaction involving the organism in the observation | `TRUE`, `FALSE` | logical |
+| [11] | `interaction_flower` | Association interaction involving the organism in the observation (presence of organism on flower(s)) | `TRUE`, `FALSE` | logical |
+| [12] | `interaction_reproduction` | Reproduction interaction involving the organism in the observation | `TRUE`, `FALSE` | logical |
+| [13] | `interaction_fungus_parasitism` | Fungus parasitism interaction involving the organism in the observation | `TRUE`, `FALSE` | logical |
+| [14] | `odd_cases` | Other notes indicating other potentially valuable or interesting information within images | x | string |
+| [15] | `fave_image` | Favorite images or observations to use for research communication & visualization purposes | `TRUE`, `FALSE` | logical | 
+| [16] | `lat` | Latitudinal coordinate of the observation | e.g., `39.217914` | double |
+| [17] | `long` | Longitudinal coordinate of the observation | e.g., `-77.316365` | double |
+| [18] | `quality_grade` | Quality grade status of the observation | `needs_id` or `research` | string |
+| [19] | `observed_date` | Date on which the observation was observed | e.g., `2025-10-31` | string |
+| [20] | `uuid` | Universally unique identifier for the observation | e.g., `73b8a2b0-3726-4d0b-98ff-feb22abd1279` | string |
+| [21] | `license_code` | Creative Commons license associated with the observation | e.g., `cc-by-nc` | string |
+| [22] | `observer_id` | Unique iNaturalist ID for the user who created the observation | e.g., `12345` | integer |
+
+
+## ETF-EPT-iNat-2025 with image metadata
+
+| Column number | Column name | Column description | Values | Column data class | 
+| --- | --- | --- | --- | --- |
+| [1] | `taxon_order_id` | Aquatic insect order identification | `Ephemeroptera`, `Plecoptera`, or `Trichoptera` | string |
+| [2] | `observation_id` | Observation ID number on iNaturalist | eg., `12345` | double |
+| [3] | `inaturalist_url` | URL to access observation on the iNaturalist platform | e.g., `https://www.inaturalist.org/observations/12345` | string |
+| [4] | `image_id` | Image ID number associated with the image(s) of the observation | eg., `12345` | double |
+| [5] | `aws_image_url` | Amazon Web Services URL used to download observation images to a local drive | eg., `12345` | double |
+| [6] | `img_name` | Unique file name used to assign images downloaded from Amazon Web Services to a local drive | eg., `12345` | double |
+
+
+## Excluded-Observations Dataset
+
+| Column number | Column name | Column description | Values | Column data class | 
+| --- | --- | --- | --- | --- |
+| [1] | `taxon_order_id` | Aquatic insect order identification | `Ephemeroptera`, `Plecoptera`, or `Trichoptera` | string |
+| [2] | `observation_id` | Observation ID number on iNaturalist | eg., `12345` | double |
+| [3] | `inaturalist_url` | URL to access observation on the iNaturalist platform | e.g., `https://www.inaturalist.org/observations/12345` | string |
+| [4] | `odd_cases` | Other notes indicating other potentially valuable or interesting information within images | x | string |
+| [5] | `fave_image` | Favorite images or observations to use for research communication & visualization purposes | `TRUE`, `FALSE` | logical | 
+| [6] | `cannot_identify` | could not identify to an EPT order for some reason described column `obs_issues` | `TRUE`, `FALSE` | logical | 
+| [7] | `inat_id_corrected` | ID corrected/updated on iNaturalist | `TRUE`, `FALSE` | logical | 
+| [8] | `obs_issues` | reason for an image not being annotated or being unable to annotate | `Missing image` (no image was downloaded due to CC rights (see 101_get_EPT_images.qmd for more info)), `Duplicate image` (observation image is visually duplicate to another observation), `Uncertain ID` (unsure whether observation is EPT due to image resolution or lack of diagnostic characters), `Copyright image` (image has copyright issues identified by me), `Incorrect order-level ID` (order-level identification is incorrect), `NA` [NA = no issues with observation] | string | 
+| [9] | `order_id_corrected` | the corrected identification of the organism in the image | e.g., `Pterygota` | string | 
+| [10] | `lat` | Latitudinal coordinate of the observation | e.g., `39.217914` | double |
+| [11] | `long` | Longitudinal coordinate of the observation | e.g., `-77.316365` | double |
+| [12] | `quality_grade` | Quality grade status of the observation | `needs_id` or `research` | string |
+| [13] | `observed_date` | Date on which the observation was observed | e.g., `2025-10-31` | string |
+| [14] | `uuid` | Universally unique identifier for the observation | e.g., `73b8a2b0-3726-4d0b-98ff-feb22abd1279` | string |
+| [15] | `license_code` | Creative Commons license associated with the observation | e.g., `cc-by-nc` | string |
+| [16] | `observer_id` | Unique iNaturalist ID for the user who created the observation | e.g., `12345` | integer |
+
+
+## Excluded-Observations Dataset with image metadata
+
+| Column number | Column name | Column description | Values | Column data class | 
+| --- | --- | --- | --- | --- |
+| [1] | `taxon_order_id` | Aquatic insect order identification | `Ephemeroptera`, `Plecoptera`, or `Trichoptera` | string |
+| [2] | `observation_id` | Observation ID number on iNaturalist | eg., `12345` | double |
+| [3] | `inaturalist_url` | URL to access observation on the iNaturalist platform | e.g., `https://www.inaturalist.org/observations/12345` | string |
+| [4] | `image_id` | Image ID number associated with the image(s) of the observation | eg., `12345` | double |
+| [5] | `aws_image_url` | Amazon Web Services URL used to download observation images to a local drive | eg., `12345` | double |
+| [6] | `img_name` | Unique file name used to assign images downloaded from Amazon Web Services to a local drive | eg., `12345` | double |
+
 
 # Export datasets
 
+```{r}
+#| label: export-data
+export_list_rds <- list(
+  "ETF-EPT-iNat-2025.rds" = ETF_EPT_iNat_2025,
+  "ETF-EPT-iNat-2025-image-metadata.rds" = ETF_EPT_iNat_2025_images_meta,
+  "excluded-observations.rds" = excluded_observations,
+  "excluded-observations-image-metadata.rds" = excluded_observations_images_meta
+)
 
+export_list_csv <- list(
+  "ETF-EPT-iNat-2025.csv" = ETF_EPT_iNat_2025,
+  "ETF-EPT-iNat-2025-image-metadata.csv" = ETF_EPT_iNat_2025_images_meta,
+  "excluded-observations.csv" = excluded_observations,
+  "excluded-observations-image-metadata.csv" = excluded_observations_images_meta
+)
+
+iwalk(export_list_rds, ~ write_rds(.x, file = here(L4_data_dir, .y)))
+iwalk(export_list_csv, ~ write_csv(.x, file = here(L4_data_dir, .y)))
+```
 
