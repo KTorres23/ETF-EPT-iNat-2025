@@ -10,7 +10,7 @@ format:
   html:
     embed-resources: true
 abstract: This script explores updated observations and original observation
-date: 2026-09-13 # last modified
+date: 2026-09-19 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -39,20 +39,6 @@ L301_data_dir <- here(L3_data_dir, "301_api_uploads")
 ```
 
 # Read data 
-
-```{r}
-# # Read in annotation dataset
-# left_join(
-#   readRDS(
-#     here(
-#       L1_data_dir,
-#       "103a_ETF_EPT_final_annotated.rds"
-#     ),
-#     join_by(observation_id)
-#   )
-# )
-
-```
 
 ## Original observations
 
