@@ -901,8 +901,8 @@ final_data <- read_rds(here("data", "L4", "ETF-EPT-iNat-2025.rds"))
 upd_reject_data <- reject_data |>
   mutate(
     obs_issues = case_when(
-      !is.na(odd_cases) & !str_detect(odd_cases, "suspended") ~ "other",
-      str_detect(obs_issues, "copyright") ~ "other",
+      !is.na(odd_cases) & !str_detect(odd_cases, "suspended") ~ "Other",
+      str_detect(obs_issues, "Copyright") ~ "Other",
       .default = obs_issues
     )
   ) |>
@@ -918,7 +918,7 @@ excluded_plot <- ggplot(
   upd_reject_data,
   aes(x = num_obs, y = reorder(obs_issues, num_obs))
 ) +
-  geom_col(fill = "#d95f02", width = 0.6) +
+  geom_col(fill = "#de2d26", width = 0.6) +
   geom_text(
     aes(label = bar_label),
     hjust = -0.1,
@@ -931,14 +931,17 @@ excluded_plot <- ggplot(
   labs(
     title = "A. Excluded Observations",
     subtitle = paste0(
-      "Total excluded = ",
-      sum(upd_reject_data$num_obs),
-      " records (<0.5% of total dataset)"
+      "(<0.5% of total dataset)"
+      # sum(upd_reject_data$num_obs),
+      # " records "
     ),
     x = "Number of Observations",
     y = NULL
   ) +
-  theme_classic(base_size = 14)
+  theme_classic(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16)
+  )
 
 excluded_plot
 
@@ -946,7 +949,9 @@ excluded_plot
 nrow(reject_data) / nrow(final_data) * 100 # only 0.47% of dataset was excluded
 
 ## % data excluded for wrong ID
-294 / nrow(final_data) * 100 # 0.38% of data was wrong
+nrow(reject_data |> filter(str_detect(obs_issues, "Incorrect"))) /
+  nrow(final_data) *
+  100 # 0.38% of data was wrong
 ```
 
 ```{r}
@@ -977,10 +982,20 @@ stacked_ids_plot <- combined_ids |>
   geom_col(width = 0.45) +
   geom_text(
     aes(label = paste0(round(pct_observations, 2), "%\n")),
-    position = position_stack(vjust = 0.5),
+    position = position_stack(vjust = 0.05),
     color = "black",
     fontface = "bold",
     size = 3.5
+  ) +
+  # add red fill color gradient based on number of IDs (#a50000ff)
+  scale_fill_manual(
+    values = c(
+      "1" = "#deebf7",
+      "2" = "#9ecae1",
+      "3" = "#6baed6",
+      "4+" = "#3182bd"
+    ),
+    name = "Number of IDs"
   ) +
   scale_y_continuous(labels = function(x) paste0(x, "%"), expand = c(0, 0)) +
   labs(
@@ -988,7 +1003,10 @@ stacked_ids_plot <- combined_ids |>
     x = "Taxonomic Order",
     y = "% of Dataset"
   ) +
-  theme_classic(base_size = 14)
+  theme_classic(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16)
+  )
 stacked_ids_plot
 ```
 
@@ -1083,6 +1101,13 @@ etf_ept_gbif_sf <- st_read(file.path(gbif_save_dir, "201_ETF_EPT_GBIF.shp"))
 #| label: read-ETF-iNat-data
 # Read in iNat Data
 final_ETF_EPT_sf <- final_ETF_EPT |>
+  ## Remove Research-Grade observations from ETF-EPT-iNat-2025 dataset
+  ## since these research obs should be in the GBIF dataset already
+  left_join(
+    final_ETF_EPT_metadata |> select(observation_id, quality_grade),
+    join_by(observation_id)
+  ) |>
+  dplyr::filter_out(quality_grade == "research") |>
   sf::st_as_sf(coords = c("long", "lat"), crs = 4326) |>
   st_transform(st_crs(etf_poly))
 ```
@@ -1101,6 +1126,7 @@ modern_gbif_sf <- etf_ept_gbif_sf |>
     as.Date("2000-01-01"),
     as.Date("2025-12-31")
   ))
+nrow(modern_gbif_sf)
 ```
 
 ```{r}
@@ -1145,10 +1171,21 @@ hex_order_comp <- full_join(
     total_obs = n_inat + n_gbif,
     log_density = log10(total_obs),
     contribution_type = case_when(
-      n_gbif == 0 & n_inat > 0 ~ "New Coverage (iNaturalist)",
-      n_inat > n_gbif ~ "iNaturalist Higher Density",
+      n_gbif == 0 & n_inat > 0 ~ "iNat Only", # new coverage
+      n_inat == 0 & n_gbif > 0 ~ "GBIF Only",
+      n_inat > n_gbif ~ "iNat Higher",
       n_inat == n_gbif ~ "Equal Density",
-      n_inat < n_gbif ~ "GBIF Higher Density"
+      n_inat < n_gbif ~ "GBIF Higher"
+    ),
+    contribution_type = factor(
+      contribution_type,
+      levels = c(
+        "iNat Only",
+        "iNat Higher",
+        "Equal Density",
+        "GBIF Higher",
+        "GBIF Only"
+      )
     )
   ) |>
   # Re-attach spatial geometry from hex_grid
@@ -1160,6 +1197,76 @@ rm(inat_order_counts, gbif_order_counts, hex_grid, target_crs)
 rm(inat_proj, gbif_proj)
 ```
 
+
+```{r}
+#| label: table3-dataset-map-distr
+order_summary <- hex_order_comp |>
+  st_drop_geometry() |>
+  group_by(order) |>
+  summarise(
+    # Hex counts by exact category
+    hex_new_inat_coverage = sum(
+      contribution_type == "iNat Only"
+    ),
+    hex_gbif_exclusive = sum(contribution_type == "GBIF Only"),
+    hex_inat_higher_dense = sum(
+      contribution_type == "iNat Higher"
+    ),
+    hex_gbif_higher_dense = sum(contribution_type == "GBIF Higher"),
+    hex_equal_density = sum(contribution_type == "Equal Density"),
+
+    # Combined iNat dominance (New coverage + Higher density)
+    hex_total_inat_advantage = hex_new_inat_coverage + hex_inat_higher_dense,
+
+    # Combined GBIF dominance (GBIF Exclusive + Higher Density)
+    hex_total_gbif_advantage = hex_gbif_exclusive + hex_gbif_higher_dense,
+
+    # Total sampled hexes for this order
+    total_hex_with_data = n(),
+
+    # Percentages
+    pct_new_inat_coverage = round(
+      (hex_new_inat_coverage / total_hex_with_data) * 100,
+      2
+    ),
+    pct_total_inat_lead = round(
+      (hex_total_inat_advantage / total_hex_with_data) * 100,
+      2
+    ),
+    pct_gbif_exclusive = round(
+      (hex_gbif_exclusive / total_hex_with_data) * 100,
+      2
+    ),
+    pct_total_gbif_lead = round(
+      (hex_total_gbif_advantage / total_hex_with_data) * 100,
+      2
+    ),
+
+    # Observation totals
+    sum_inat_obs = sum(n_inat),
+    sum_gbif_obs = sum(n_gbif),
+    net_new_inat_obs = sum(pmax(0, n_inat - n_gbif)),
+
+    # Average observations per grid
+    mean_inat = round(mean(n_inat[n_inat > 0]), 2),
+    mean_gbif = round(mean(n_gbif[n_gbif > 0]), 2),
+    sd_inat_obs = round(sd(n_inat), 2),
+    sd_gbif_obs = round(sd(n_gbif), 2),
+    .groups = "drop"
+  )
+
+print(order_summary, width = 500)
+
+# Save as table 3
+order_summary_t <- order_summary |>
+  mutate(across(everything(), as.character)) |>
+  pivot_longer(-order, names_to = "Metric", values_to = "value") |>
+  pivot_wider(names_from = order, values_from = value)
+doc <- read_docx() |>
+  body_add_flextable(autofit(flextable(order_summary_t)))
+
+print(doc, target = here(L201_figs_dir, "201_table3_dataset_map_distr.docx"))
+```
 
 ```{r}
 #| label: create-hex-map
@@ -1239,12 +1346,14 @@ figure3 <- ggplot() +
   # Category color scale
   scale_fill_manual(
     values = c(
-      "New Coverage (iNaturalist)" = "#2ca25f",
-      "iNaturalist Higher Density" = "#2b83ba",
-      "Equal Density" = "#feb24c",
-      "GBIF Higher Density" = "#d7191c"
+      "iNat Only" = "#e31a1c", # Saturated bright red
+      "iNat Higher" = "#ff7f00", # Warm amber / bright orange
+      "Equal Density" = "#252525", # Charcoal black (stands out through alpha) 737373
+      "GBIF Higher" = "#33a02c", # Vivid grass green
+      "GBIF Only" = "#1f78b4" # Bold royal blue
     ),
-    name = "Dataset Comparison"
+    name = "Dataset Contribution",
+    drop = FALSE
   ) +
 
   # Continuous scale for Observation Density
@@ -1258,11 +1367,12 @@ figure3 <- ggplot() +
   # Ensure legend keys remain distinct
   guides(
     fill = guide_legend(override.aes = list(alpha = 1), order = 1),
-    alpha = guide_legend(override.aes = list(fill = "#2b83ba"), order = 2)
+    alpha = guide_legend(override.aes = list(fill = "#818181ff"), order = 2)
   ) +
 
   labs(
-    title = "iNaturalist Observations Relative to GBIF Occurrences by Aquatic Insect Order",
+    #title = "iNaturalist Observations Relative to GBIF Occurrences by Aquatic Insect Order",
+    title = NULL,
     x = NULL,
     y = NULL
   ) +
