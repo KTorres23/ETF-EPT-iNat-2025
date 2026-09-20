@@ -496,7 +496,20 @@ change_in_obs <- both_obs |>
         str_to_sentence(taxon_rank_after)
       ),
       TRUE ~ NA_character_
-    )
+    ),
+
+    change_type_labels = case_when(
+      direction == "Unchanged" ~ paste0(
+        "Unchanged - ",
+        str_to_sentence(taxon_rank_before)
+      ),
+      !is.na(direction) ~ paste0(
+        str_to_sentence(taxon_rank_before),
+        " to ",
+        str_to_sentence(taxon_rank_after)
+      ),
+      TRUE ~ NA_character_
+    ),
   )
 ```
 
@@ -545,41 +558,41 @@ fig4a_direction <- ggplot(
   aes(x = pct, y = fct_rev(direction), fill = direction)
 ) +
   geom_col(width = 0.55, show.legend = FALSE) +
-  geom_text(aes(label = label), vjust = -1, size = 5) +
+  geom_text(aes(label = label), vjust = -1, size = 6) +
   scale_fill_manual(
     values = c(
-      "Unchanged" = "#2b83ba",
-      "Finer" = "#2ca25f",
-      "Coarser" = "#d7191c"
+      "Unchanged" = "#969696",
+      "Finer" = "#3182bd",
+      "Coarser" = "#de2d26"
     )
   ) +
   coord_flip() +
   scale_x_continuous(limits = c(0, 110), expand = c(0, 0)) +
   labs(
-    title = "A. Community Taxon Identification Consensus (n = 2,956)",
+    title = "A. Community Taxon Identification Consensus",
     x = "% of Changed Observations",
     y = "Consensus Direction"
   ) +
-  theme_classic(base_size = 16) +
+  theme_classic(base_size = 20) +
   theme(plot.title = element_text(face = "bold"))
 fig4a_direction
 
 ## Fig 4b Visualize taxonomic change in shifts of the community taxon id
 shift_summary <- change_in_obs |>
   filter(direction != "Unchanged") |>
-  count(change_type, direction) |>
+  count(change_type_labels, direction) |>
   filter(n >= 5) |> # drop isolated 1-2 counts of changed obs
   mutate(
-    change_type = fct_reorder(change_type, n)
+    change_type_labels = fct_reorder(change_type_labels, n)
   )
 
 fig4b_shift <- ggplot(
   shift_summary,
-  aes(x = n, y = change_type, fill = direction)
+  aes(x = n, y = change_type_labels, fill = direction)
 ) +
   geom_col(width = 0.65, show.legend = FALSE) +
-  geom_text(aes(label = paste0("n = ", n)), hjust = -0.15, size = 5) +
-  scale_fill_manual(values = c("Finer" = "#2ca25f", "Coarser" = "#d7191c")) +
+  geom_text(aes(label = paste0("n = ", n)), hjust = -0.15, size = 6) +
+  scale_fill_manual(values = c("Finer" = "#3182bd", "Coarser" = "#de2d26")) +
   scale_x_continuous(
     limits = c(0, max(shift_summary$n) * 1.3),
     expand = c(0, 0)
@@ -589,7 +602,7 @@ fig4b_shift <- ggplot(
     x = "Number of Observations",
     y = NULL
   ) +
-  theme_classic(base_size = 16) +
+  theme_classic(base_size = 20) +
   theme(plot.title = element_text(face = "bold"))
 fig4b_shift
 ```
