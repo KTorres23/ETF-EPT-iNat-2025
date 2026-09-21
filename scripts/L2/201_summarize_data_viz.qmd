@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script creates visualizations of my final data used for modelling and analyses.
-date: 2026-09-19 # last modified
+date: 2026-09-21 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -884,6 +884,50 @@ prop_immature <- unique_life_stages / num_obs_study * 100
 prop_adult <- 100 - prop_immature
 print(prop_immature) #10.43%
 print(prop_adult) #89.57%
+```
+
+```{r}
+#| label: summarize-secondary-data
+final_data <- read_rds(here("data", "L4", "ETF-EPT-iNat-2025.rds"))
+
+num_obs_study <- nrow(final_data)
+
+# Evidence
+num_evidence <- final_data |> filter(evidence_type != "Organism") |> nrow()
+prop_evidence <- num_evidence / num_obs_study * 100
+prop_evidence # 2.0% dataset is evidence of an organism
+# 98% dataset is an organism
+
+# Sampling technique
+num_technique <- final_data |>
+  group_by(collection_technique) |>
+  summarize(
+    total_obs = n(),
+    pct_observations = (total_obs / num_obs_study) * 100
+  )
+print(num_technique)
+# 24.4% from light trap
+# 4.3% in net/container
+# 68.9% no technique
+# 2.4% under microscope
+
+# Species interaction
+num_interaction <- final_data |>
+  summarize(
+    total_obs = sum(
+      c(
+        multiple_specimen_present,
+        interaction_predation,
+        interaction_flower,
+        interaction_reproduction,
+        interaction_fungus_parasitism
+      ),
+      na.rm = TRUE
+    ),
+    pct_observations = (total_obs / num_obs_study) * 100
+  )
+print(num_interaction)
+# 3.4% dataset includes a species interaction/aggregation
 ```
 
 ## Excluded Data Summary - Figure 2
