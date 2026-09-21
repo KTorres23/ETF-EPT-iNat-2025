@@ -1,0 +1,72 @@
+additional labels in notes includes (separated by "; " if multiple labels), parentheses are here just to describe what the note meant & is not contained in the column:
+
+light trap (collected via light trap - couple of obs with this note before I made the light trap button/col)
+preserved (pinned or otherwise preserved specimen)
+other species - {SPECIES NAME; e.g., wasp}
+corrected (corrected the species ID on iNat)
+
+predation (insect being eaten/in cobweb)
+flower (for mayflies on flowers)
+turtle (on a turtle :P)
+fave (good pic to reuse for presentation!)
+dupe (duplicate observation)
+mating (two organisms mating interaction!)
+eggs
+copyright (image not by the observer; copyright infringement)
+no image (missing image)
+fungus (for trichoptera - i dont think all the tric contaning funguses were given this label)
+also adult
+molt
+unsure
+user suspended
+
+
+try Dan's aesthetic photo thingy
+
+adult + evidence = nymph to adult exuviae
+nymph + evidence = nymph-related evidence (e.g., trichoptera case or ephemeroptera molt - often couldnt see the actual larva for tric)
+
+adult + microscope is not the same as adult + preserved; preserved means pinned or in a container?
+
+there's also an interesting number of observation in cardboard egg cartons - some kind of specific sampling technique
+
+lots of adults on gas stations
+
+often theree are multiple obs (diff images) for the same observations -  maybe some kind of spatiotemporal rarifaction by observer?
+
+
+temporal, spatial, observer patterns associated with incorrect IDs?
+
+also look at description/comments for info about light traps
+
+
+
+consider making a figure of correct/incorrect IDs
+i give species Pterygota if i genuinely cant tell which insect order it is bc of low quality or if i just cant tell
+
+CNC spikes in data temporally? -- national moth week??
+
+these are all easily identifable morphologically:
+for plecoptera - do Family Peltoperlidae (roachlike stoneflies) - or maybe gren plecoptera
+for ephemeroptear - do Genus Baestica
+for trichoptera - snail-case making?
+
+
+evansnaturalist has like 600 plecoptera observations in one little place alone -crzy
+maybe need like some sort of temporally-based spatial rarefaction?
+
+trichoptera images by cdecresenza are collected from how?
+
+look at labels of images taken at observed_on night time vs daytime
+
+look at trich image by cammfl
+
+
+some kind of visualizer for 
+- observations by 1 observer, within the same month (or all time), within a 50m radius - show all images 
+
+
+check IDs - correct? more than 1 ID? Resreach grade?
+
+annotations
+https://help.inaturalist.org/en/support/solutions/articles/151000191830-what-are-the-definitions-of-inaturalist-annotations-

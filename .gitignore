@@ -4,8 +4,9 @@ TODOs.md
 
 .Renviron
 
-data/L0
-data/L1
-data/L2
-data/L3
-data/L4
+data/L0/*
+!data/L0/004_clean_ETF_EPT_obs.csv
+data/L1/101c_ETF_EPT_images
+data/L1/101a_images_clean_ETF_EPT_obs.rds
+data/L2/201_ETF_EPT_GBIF_shp
+data/L3/302_updated_obs.csv
