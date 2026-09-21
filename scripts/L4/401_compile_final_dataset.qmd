@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script compiles the final ETF-EPT-iNat-2025 dataset, metadata, and excluded-observations dataset
-date: 2026-09-19 # last modified
+date: 2026-09-21 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -73,6 +73,7 @@ ETF_EPT_iNat_2025 <- final_data |>
     # Grab extra iNat metadata
     lat,
     long,
+    positional_accuracy,
     quality_grade,
     observed_date = observed_on_details.date,
     uuid,
@@ -131,6 +132,7 @@ excluded_observations <- reject_data |>
     # Grab extra iNat metadata
     lat,
     long,
+    positional_accuracy,
     quality_grade,
     observed_date = observed_on_details.date,
     uuid,
@@ -198,11 +200,12 @@ excluded_observations_images_meta <- excluded_observations |>
 | [15] | `fave_image` | Favorite images or observations to use for research communication & visualization purposes | `TRUE`, `FALSE` | logical | 
 | [16] | `lat` | Latitudinal coordinate of the observation | e.g., `39.217914` | double |
 | [17] | `long` | Longitudinal coordinate of the observation | e.g., `-77.316365` | double |
-| [18] | `quality_grade` | Quality grade status of the observation | `needs_id` or `research` | string |
-| [19] | `observed_date` | Date on which the observation was observed | e.g., `2025-10-31` | string |
-| [20] | `uuid` | Universally unique identifier for the observation | e.g., `73b8a2b0-3726-4d0b-98ff-feb22abd1279` | string |
-| [21] | `license_code` | Creative Commons license associated with the observation | e.g., `cc-by-nc` | string |
-| [22] | `observer_id` | Unique iNaturalist ID for the user who created the observation | e.g., `12345` | integer |
+| [18] | `positional_accuracy` | Accuracy of latitudinal and longitudinal coordinates in meters | e.g., `12` | integer |
+| [19] | `quality_grade` | Quality grade status of the observation | `needs_id` or `research` | string |
+| [20] | `observed_date` | Date on which the observation was observed | e.g., `2025-10-31` | string |
+| [21] | `uuid` | Universally unique identifier for the observation | e.g., `73b8a2b0-3726-4d0b-98ff-feb22abd1279` | string |
+| [22] | `license_code` | Creative Commons license associated with the observation | e.g., `cc-by-nc` | string |
+| [23] | `observer_id` | Unique iNaturalist ID for the user who created the observation | e.g., `12345` | integer |
 
 
 ## ETF-EPT-iNat-2025 with image metadata
@@ -232,11 +235,12 @@ excluded_observations_images_meta <- excluded_observations |>
 | [9] | `order_id_corrected` | the corrected identification of the organism in the image | e.g., `Pterygota` | string | 
 | [10] | `lat` | Latitudinal coordinate of the observation | e.g., `39.217914` | double |
 | [11] | `long` | Longitudinal coordinate of the observation | e.g., `-77.316365` | double |
-| [12] | `quality_grade` | Quality grade status of the observation | `needs_id` or `research` | string |
-| [13] | `observed_date` | Date on which the observation was observed | e.g., `2025-10-31` | string |
-| [14] | `uuid` | Universally unique identifier for the observation | e.g., `73b8a2b0-3726-4d0b-98ff-feb22abd1279` | string |
-| [15] | `license_code` | Creative Commons license associated with the observation | e.g., `cc-by-nc` | string |
-| [16] | `observer_id` | Unique iNaturalist ID for the user who created the observation | e.g., `12345` | integer |
+| [12] | `positional_accuracy` | Accuracy of latitudinal and longitudinal coordinates in meters | e.g., `12` | integer |
+| [13] | `quality_grade` | Quality grade status of the observation | `needs_id` or `research` | string |
+| [14] | `observed_date` | Date on which the observation was observed | e.g., `2025-10-31` | string |
+| [15] | `uuid` | Universally unique identifier for the observation | e.g., `73b8a2b0-3726-4d0b-98ff-feb22abd1279` | string |
+| [16] | `license_code` | Creative Commons license associated with the observation | e.g., `cc-by-nc` | string |
+| [17] | `observer_id` | Unique iNaturalist ID for the user who created the observation | e.g., `12345` | integer |
 
 
 ## Excluded-Observations Dataset with image metadata
