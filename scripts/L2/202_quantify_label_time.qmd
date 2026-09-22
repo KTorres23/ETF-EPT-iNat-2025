@@ -9,8 +9,8 @@ toc: true
 format:
   html:
     embed-resources: true
-abstract: This script prepares a dataset of IDs and annotations to add to iNaturalist.
-date: 2026-09-15 # last modified
+abstract: This script quantifies the time spent labelling images.
+date: 2026-09-22 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
