@@ -1,0 +1,63 @@
+{
+  "totalObservations": 78259,
+  "columns": [
+    "observation_id",
+    "taxon_order_id",
+    "life_stage",
+    "evidence_type",
+    "collection_technique",
+    "fave_image",
+    "quality_grade",
+    "observed_date",
+    "lat",
+    "long",
+    "positional_accuracy",
+    "observer_id",
+    "license_code",
+    "odd_cases",
+    "flags",
+    "photo_id"
+  ],
+  "counts": {
+    "byOrder": {
+      "Ephemeroptera": 28479,
+      "Plecoptera": 13130,
+      "Trichoptera": 36650
+    },
+    "byStage": {
+      "Immature": 8159,
+      "Adult": 70073,
+      "Eggs": 27
+    },
+    "byQuality": {
+      "needs_id": 71465,
+      "research": 6794
+    },
+    "byTechnique": {
+      "Under microscope": 1842,
+      "No technique": 53958,
+      "In net or container": 3382,
+      "From light trap": 19077
+    },
+    "byEvidence": {
+      "Organism": 76697,
+      "Nymph to adult exuviae": 889,
+      "Nymph-related evidence": 646,
+      "Eggs": 27
+    },
+    "byLicense": {
+      "cc-by-nc": 66705,
+      "cc0": 3728,
+      "cc-by": 7826
+    }
+  },
+  "flagDefinitions": [
+    "multiple_specimen_present",
+    "human_present",
+    "preserved_specimen",
+    "interaction_predation",
+    "interaction_flower",
+    "interaction_reproduction",
+    "interaction_fungus_parasitism"
+  ]
+}

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETF-EPT-iNat-2025 | Aquatic Insect Observation Dashboard</title>
+  <meta name="description"
+    content="Interactive dashboard to query, filter, and explore curated iNaturalist observations of Ephemeroptera, Plecoptera, and Trichoptera (ETF-EPT-iNat-2025).">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="css/index.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+
+<body>
+
+  <!-- =========================================================
+       App Header
+       ========================================================= -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand-section">
+        <div class="brand-logo" title="ETF-EPT-iNat-2025">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h1>ETF-EPT-iNat-2025</h1>
+          <span class="tagline">Aquatic Macroinvertebrate Data Explorer</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <a href="https://github.com/KTorres23/ETF-EPT-iNat-2025" target="_blank" rel="noopener noreferrer"
+          class="btn-icon" title="View GitHub Repository" id="btn-github-repo">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+          </svg>
+        </a>
+        <button class="btn-icon" id="btn-theme-toggle" title="Toggle Dark / Light Theme" aria-label="Toggle theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================
+       Live Stats Ticker Bar
+       ========================================================= -->
+  <section class="stats-ticker-bar">
+    <div class="stats-ticker-inner">
+      <div class="stat-group">
+        <div class="stat-item">
+          <span>Curated:</span>
+          <strong id="stat-curated-count">78,259</strong>
+        </div>
+        <div class="stat-badge ephem">
+          <span>Ephemeroptera:</span>
+          <strong id="stat-ephem-count">28,479</strong>
+        </div>
+        <div class="stat-badge plecop">
+          <span>Plecoptera:</span>
+          <strong id="stat-plecop-count">13,130</strong>
+        </div>
+        <div class="stat-badge trichop">
+          <span>Trichoptera:</span>
+          <strong id="stat-trichop-count">36,650</strong>
+        </div>
+        <div class="stat-badge excluded">
+          <span>Excluded QC:</span>
+          <strong id="stat-excluded-count">371</strong>
+        </div>
+      </div>
+
+      <div class="stat-item" id="data-loading-status" style="font-size:0.75rem;">
+        <span style="color:var(--accent-sky);">● Hydrating observation dataset in background...</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       Primary Tabs Navigation
+       ========================================================= -->
+  <nav class="tabs-nav-container">
+    <div class="tabs-nav-inner">
+      <button class="tab-btn active" data-tab="curated" id="tab-nav-curated">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+        </svg>
+        <span>Curated Observations</span>
+        <span class="tab-count" id="tab-curated-count">78,259</span>
+      </button>
+
+      <button class="tab-btn" data-tab="excluded" id="tab-nav-excluded">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>Excluded Observations</span>
+        <span class="tab-count">371</span>
+      </button>
+
+      <button class="tab-btn" data-tab="contributors" id="tab-nav-contributors">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        <span>Contributor Lookup</span>
+        <span class="tab-count">19,050</span>
+      </button>
+
+      <button class="tab-btn" data-tab="about" id="tab-nav-about">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </svg>
+        <span>About & Metadata</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- =========================================================
+       Main Content Panes
+       ========================================================= -->
+  <main class="main-content">
+
+    <!-- -------------------------------------------------------
+         TAB 1: Curated Observations
+         ------------------------------------------------------- -->
+    <section class="tab-pane active" id="tab-pane-curated">
+
+      <!-- Controls Toolbar -->
+      <div class="controls-container" id="curated-controls">
+        <div class="search-row">
+          <div class="search-input-group">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" class="form-input" id="curated-search-input"
+              placeholder="Search observations (ID, observer, order, notes)..." />
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Column:</span>
+            <select class="form-select" id="curated-search-column">
+              <option value="all">All Columns</option>
+              <option value="observation_id">Observation ID</option>
+              <option value="observer_id">Observer ID</option>
+              <option value="odd_cases">Curator Notes (odd_cases)</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Group By:</span>
+            <select class="form-select" id="curated-group-by">
+              <option value="none">No Grouping</option>
+              <option value="taxon_order_id">Taxon Order</option>
+              <option value="life_stage">Life Stage</option>
+              <option value="collection_technique">Collection Technique</option>
+              <option value="quality_grade">Quality Grade</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Sort:</span>
+            <select class="form-select" id="curated-sort-by">
+              <option value="id_desc">Observation ID (Highest first)</option>
+              <option value="id_asc">Observation ID (Lowest first)</option>
+              <option value="date_desc">Date Observed (Newest)</option>
+              <option value="date_asc">Date Observed (Oldest)</option>
+            </select>
+          </div>
+
+          <button class="btn-reset" id="curated-reset-btn" title="Reset all filters">Reset Filters</button>
+        </div>
+
+        <div class="filters-row">
+          <div class="filter-item">
+            <span class="filter-label">Order:</span>
+            <select class="form-select" id="curated-filter-order">
+              <option value="">All Orders</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Stage:</span>
+            <select class="form-select" id="curated-filter-stage">
+              <option value="">All Life Stages</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Technique:</span>
+            <select class="form-select" id="curated-filter-technique">
+              <option value="">All Techniques</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Evidence:</span>
+            <select class="form-select" id="curated-filter-evidence">
+              <option value="">All Evidence Types</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Quality:</span>
+            <select class="form-select" id="curated-filter-quality">
+              <option value="">All Grades</option>
+              <option value="research">Research Grade</option>
+              <option value="needs_id">Needs ID</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checkbox-toggle-group">
+          <label class="toggle-chip" id="toggle-fave">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <polygon
+                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <span>Favorites only</span>
+          </label>
+          <label class="toggle-chip" id="toggle-human">
+            <span>👤 Human present</span>
+          </label>
+          <label class="toggle-chip" id="toggle-specimens">
+            <span>👥 Multiple specimens</span>
+          </label>
+          <label class="toggle-chip" id="toggle-preserved">
+            <span>🔬 Preserved specimen</span>
+          </label>
+          <label class="toggle-chip" id="toggle-interactions">
+            <span>🌿 Has interaction</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Results Count Header -->
+      <div class="results-header">
+        <div class="results-count" id="curated-results-count">
+          Showing <strong>78,259</strong> observations
+        </div>
+      </div>
+
+      <!-- Cards Grid -->
+      <div class="cards-grid" id="curated-cards-grid"></div>
+
+      <!-- Pagination Container -->
+      <div class="pagination-container" id="curated-pagination"></div>
+
+    </section>
+
+    <!-- -------------------------------------------------------
+         TAB 2: Excluded Observations
+         ------------------------------------------------------- -->
+    <section class="tab-pane" id="tab-pane-excluded">
+
+      <div class="controls-container" id="excluded-controls">
+        <div class="search-row">
+          <div class="search-input-group">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" class="form-input" id="excluded-search-input"
+              placeholder="Search excluded observations (ID, issue reason, corrected ID)..." />
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Order:</span>
+            <select class="form-select" id="excluded-filter-order">
+              <option value="">All Orders</option>
+              <option value="Ephemeroptera">Ephemeroptera</option>
+              <option value="Plecoptera">Plecoptera</option>
+              <option value="Trichoptera">Trichoptera</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">QC Issue Reason:</span>
+            <select class="form-select" id="excluded-filter-issue">
+              <option value="">All Issues</option>
+              <option value="Incorrect order-level ID">Incorrect order-level ID</option>
+              <option value="Duplicate image">Duplicate image</option>
+              <option value="Uncertain ID">Uncertain ID</option>
+              <option value="Missing image">Missing image</option>
+              <option value="Copyright image">Copyright image</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">Group By:</span>
+            <select class="form-select" id="excluded-group-by">
+              <option value="none">No Grouping</option>
+              <option value="obs_issues">QC Issue Reason</option>
+              <option value="taxon_order_id">Taxon Order</option>
+              <option value="order_id_corrected">Corrected Order</option>
+            </select>
+          </div>
+
+          <button class="btn-reset" id="excluded-reset-btn">Reset Filters</button>
+        </div>
+      </div>
+
+      <div class="results-header">
+        <div class="results-count" id="excluded-results-count">
+          Showing <strong>371</strong> excluded observations
+        </div>
+      </div>
+
+      <div class="cards-grid" id="excluded-cards-grid"></div>
+      <div class="pagination-container" id="excluded-pagination"></div>
+
+    </section>
+
+    <!-- -------------------------------------------------------
+         TAB 3: Contributor Lookup & Acknowledgments
+         ------------------------------------------------------- -->
+    <section class="tab-pane" id="tab-pane-contributors">
+
+      <div class="contributor-hero">
+        <h2>iNaturalist Contributor Lookup & Acknowledgments</h2>
+        <p>
+          Enter your iNaturalist username below to verify your contributions (observations, community identifications,
+          and annotations) included in the <strong>ETF-EPT-iNat-2025</strong> dataset.
+        </p>
+
+        <div class="contributor-search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" class="contributor-search-input" id="contributor-search-input"
+            placeholder="Enter your iNaturalist username (e.g. kmtorres)..." autocomplete="off" />
+          <div class="autocomplete-dropdown" id="contributor-autocomplete"></div>
+        </div>
+      </div>
+
+      <!-- Contributor Showcase Card -->
+      <div class="contributor-card" id="contributor-card"></div>
+
+      <!-- Leaderboards -->
+      <div class="leaderboards-container">
+        <h3>🏆 Top Community Contributors</h3>
+        <div id="leaderboards-content"></div>
+      </div>
+
+    </section>
+
+    <!-- -------------------------------------------------------
+         TAB 4: About & Metadata
+         ------------------------------------------------------- -->
+    <section class="tab-pane" id="tab-pane-about">
+      <div class="controls-container" style="max-width:960px; margin:0 auto; padding:2rem;">
+        <h2 style="margin-bottom:1rem;">About the ETF-EPT-iNat-2025 Visualizer</h2>
+        <p style="color:var(--text-secondary); margin-bottom:1.25rem; line-height:1.7;">
+          This web visualizer was made for visualizing and exploring the <strong>ETF-EPT-iNat-2025</strong> dataset,
+          which curates community-contributed observations of three aquatic insect orders—<strong>Ephemeroptera</strong>
+          (mayflies),
+          <strong>Plecoptera</strong> (stoneflies), and <strong>Trichoptera</strong> (caddisflies)—from iNaturalist.
+        </p>
+
+        <div
+          style="background:rgba(56, 189, 248, 0.1); border:1px solid rgba(56, 189, 248, 0.35); border-radius:var(--radius-md); padding:1.25rem; margin-bottom:2rem; display:flex; align-items:flex-start; gap:0.85rem;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            style="color:var(--accent-sky); flex-shrink:0; margin-top:2px;">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+          <div>
+            <strong style="color:var(--text-primary); display:block; margin-bottom:0.35rem;">Curated Dataset
+              Documentation & Schema</strong>
+            <span style="color:var(--text-secondary); font-size:0.9rem; line-height:1.6;">
+              For more information on how the dataset was curated (including the full dataset schema, data cleaning
+              pipeline, and metadata descriptions), visit the main GitHub repository README at:
+            </span>
+            <div style="margin-top:0.5rem;">
+              <a href="https://github.com/KTorres23/ETF-EPT-iNat-2025#readme" target="_blank" rel="noopener noreferrer"
+                class="btn-primary"
+                style="font-size:0.84rem; padding:0.45rem 0.95rem; text-decoration:none; display:inline-flex;">
+                <span>View GitHub Repository README</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="margin-bottom:0.75rem; color:var(--accent-sky);">Target Indicator Orders</h3>
+        <div
+          style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:1rem; margin-bottom:2rem;">
+          <div class="stat-box" style="text-align:left; border-left:4px solid var(--order-ephem);">
+            <h4 style="color:var(--order-ephem);">Ephemeroptera (Mayflies)</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem;">
+              Short-lived winged adults with aquatic nymphs featuring abdominal gills. Key bioindicators of organic
+              stream health.
+            </p>
+          </div>
+          <div class="stat-box" style="text-align:left; border-left:4px solid var(--order-plecop);">
+            <h4 style="color:var(--order-plecop);">Plecoptera (Stoneflies)</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem;">
+              Require clean, highly oxygenated cold running waters. Highly sensitive to water pollution and
+              sedimentation.
+            </p>
+          </div>
+          <div class="stat-box" style="text-align:left; border-left:4px solid var(--order-trichop);">
+            <h4 style="color:var(--order-trichop);">Trichoptera (Caddisflies)</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem;">
+              Famous for constructing intricate protective portable silk cases from gravel or plant debris.
+            </p>
+          </div>
+        </div>
+
+        <!-- AI Disclaimer -->
+        <div
+          style="background:var(--bg-tertiary); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:1rem 1.25rem; margin-top:1.5rem; font-size:0.82rem; color:var(--text-muted); display:flex; align-items:center; gap:0.65rem;">
+          <span style="font-size:1.1rem;">🤖</span>
+          <span>
+            <strong>Disclaimer:</strong> This web visualizer dashboard was designed and built by <strong>Gemini 3.8
+              Flash (Medium)</strong> on <strong>2026-09-22</strong>.
+          </span>
+        </div>
+
+        <div
+          style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border-subtle); color:var(--text-muted); font-size:0.85rem;">
+          <p>Curated by: <strong>Karina Torres</strong> (Southern Illinois University) • <a
+              href="https://github.com/KTorres23" target="_blank" rel="noopener noreferrer">github.com/KTorres23</a></p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =========================================================
+       Footer
+       ========================================================= -->
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <div class="footer-meta">
+        <strong>ETF-EPT-iNat-2025 Web Visualizer</strong>
+        <span>Curated dataset of Ephemeroptera, Plecoptera, and Trichoptera observations from iNaturalist.</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/KTorres23/ETF-EPT-iNat-2025" target="_blank" rel="noopener noreferrer">GitHub
+          Repository</a>
+        <a href="https://www.inaturalist.org" target="_blank" rel="noopener noreferrer">iNaturalist.org</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Main Application Script -->
+  <script type="module" src="js/app.js"></script>
+</body>
+
+</html>

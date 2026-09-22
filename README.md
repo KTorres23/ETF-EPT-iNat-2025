@@ -119,9 +119,10 @@ Funding: **TO DO**
 
 #### [`misc/...`](misc)
 
-* [`misc/legacy_code/...`](misc\legacy_code) Old code
-* [`misc/annotation_tool_ss/...`](misc\annotation_tool_ss) Workflow screenshots of EPT Image Annotation Tool
-* [`misc/workflow_figure.png`](misc\workflow_figure.png) Figure of dataset workflow process
+* [`misc/legacy_code/...`](misc/legacy_code) Directory containing old code
+* [`misc/annotation_tool_ss/...`](misc/annotation_tool_ss) Directory containing workflow screenshots of EPT Image Annotation Tool
+* [`misc/web-data-visualizer/...`](misc/web-data-visualizer/) Directory containing code used to visualize datasets from this repository through GitHub Pages
+* [`misc/workflow_figure.png`](misc/workflow_figure.png) Figure of dataset workflow process
 
 #### [`scripts/...`](scripts)
 
