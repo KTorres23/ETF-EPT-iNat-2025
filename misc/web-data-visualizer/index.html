@@ -17,7 +17,12 @@
 
   <!-- CSS Stylesheets -->
   <link rel="stylesheet" href="css/index.css">
-  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/components.css?v=2">
+
+  <!-- Leaflet & MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 </head>
 
 <body>
@@ -104,47 +109,86 @@
   <!-- =========================================================
        Primary Tabs Navigation
        ========================================================= -->
-  <nav class="tabs-nav-container">
-    <div class="tabs-nav-inner">
-      <button class="tab-btn active" data-tab="curated" id="tab-nav-curated">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7" />
-          <rect x="14" y="3" width="7" height="7" />
-          <rect x="14" y="14" width="7" height="7" />
-          <rect x="3" y="14" width="7" height="7" />
+  <nav class="tabs-nav-container" aria-label="Dataset Sections">
+    <div class="tabs-nav-scroll-wrapper" id="tabs-scroll-wrapper">
+      <button class="tabs-scroll-btn left" id="tabs-scroll-left" aria-label="Scroll tabs left" title="Scroll tabs left" type="button" tabindex="-1">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
-        <span>Curated Observations</span>
-        <span class="tab-count" id="tab-curated-count">78,259</span>
       </button>
 
-      <button class="tab-btn" data-tab="excluded" id="tab-nav-excluded">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
-        <span>Excluded Observations</span>
-        <span class="tab-count">371</span>
-      </button>
+      <div class="tabs-nav-inner" role="tablist" aria-label="Dataset navigation tabs">
+        <button class="tab-btn active" role="tab" id="tab-nav-curated" aria-controls="tab-pane-curated" aria-selected="true" tabindex="0" data-tab="curated">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+          </svg>
+          <span class="tab-label">
+            <span class="tab-label-base">Curated</span>
+            <span class="tab-label-extra"> Observations</span>
+          </span>
+          <span class="tab-count" id="tab-curated-count" aria-label="78,259 records">78,259</span>
+        </button>
 
-      <button class="tab-btn" data-tab="contributors" id="tab-nav-contributors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-        <span>Contributor Lookup</span>
-        <span class="tab-count">19,050</span>
-      </button>
+        <button class="tab-btn" role="tab" id="tab-nav-map" aria-controls="tab-pane-curated" aria-selected="false" tabindex="-1" data-tab="map">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+            <line x1="8" y1="2" x2="8" y2="18" />
+            <line x1="16" y1="6" x2="16" y2="22" />
+          </svg>
+          <span class="tab-label">
+            <span class="tab-label-base">Geospatial</span>
+            <span class="tab-label-extra"> Map</span>
+          </span>
+          <span class="tab-count" id="tab-map-count" aria-label="78,259 records">78,259</span>
+        </button>
 
-      <button class="tab-btn" data-tab="about" id="tab-nav-about">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 16v-4" />
-          <path d="M12 8h.01" />
+        <button class="tab-btn" role="tab" id="tab-nav-excluded" aria-controls="tab-pane-excluded" aria-selected="false" tabindex="-1" data-tab="excluded">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span class="tab-label">
+            <span class="tab-label-base">Excluded</span>
+            <span class="tab-label-extra"> Observations</span>
+          </span>
+          <span class="tab-count" aria-label="371 records">371</span>
+        </button>
+
+        <button class="tab-btn" role="tab" id="tab-nav-contributors" aria-controls="tab-pane-contributors" aria-selected="false" tabindex="-1" data-tab="contributors">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          <span class="tab-label">
+            <span class="tab-label-base">Contributors</span>
+            <span class="tab-label-extra"> Lookup</span>
+          </span>
+          <span class="tab-count" aria-label="19,050 records">19,050</span>
+        </button>
+
+        <button class="tab-btn" role="tab" id="tab-nav-about" aria-controls="tab-pane-about" aria-selected="false" tabindex="-1" data-tab="about">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+          <span class="tab-label">
+            <span class="tab-label-base">About</span>
+            <span class="tab-label-extra"> & Metadata</span>
+          </span>
+        </button>
+      </div>
+
+      <button class="tabs-scroll-btn right" id="tabs-scroll-right" aria-label="Scroll tabs right" title="Scroll tabs right" type="button" tabindex="-1">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"></polyline>
         </svg>
-        <span>About & Metadata</span>
       </button>
     </div>
   </nav>
@@ -157,7 +201,7 @@
     <!-- -------------------------------------------------------
          TAB 1: Curated Observations
          ------------------------------------------------------- -->
-    <section class="tab-pane active" id="tab-pane-curated">
+    <section class="tab-pane active" id="tab-pane-curated" role="tabpanel" tabindex="0" aria-labelledby="tab-nav-curated">
 
       <!-- Controls Toolbar -->
       <div class="controls-container" id="curated-controls">
@@ -202,6 +246,14 @@
             </select>
           </div>
 
+          <button class="btn-visualize-map" id="curated-btn-map" title="Visualize filtered observations on interactive map">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+              <line x1="8" y1="2" x2="8" y2="18" />
+              <line x1="16" y1="6" x2="16" y2="22" />
+            </svg>
+            <span>Visualize on Map</span>
+          </button>
           <button class="btn-reset" id="curated-reset-btn" title="Reset all filters">Reset Filters</button>
         </div>
 
@@ -267,10 +319,82 @@
         </div>
       </div>
 
-      <!-- Results Count Header -->
+      <!-- Results Count Header & View Switcher -->
       <div class="results-header">
         <div class="results-count" id="curated-results-count">
           Showing <strong>78,259</strong> observations
+        </div>
+
+        <div class="view-options">
+          <button class="view-mode-btn active" id="btn-view-cards" title="Switch to Cards Grid View">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Cards</span>
+          </button>
+          <button class="view-mode-btn" id="btn-view-map" title="Switch to Interactive Map View">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+              <line x1="8" y1="2" x2="8" y2="18"></line>
+              <line x1="16" y1="6" x2="16" y2="22"></line>
+            </svg>
+            <span>Map View</span>
+            <span class="btn-count-badge" id="btn-map-badge">78,259</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Map View Container -->
+      <div class="map-view-wrapper" id="curated-map-view" style="display:none;">
+        <div class="map-toolbar">
+          <div class="map-toolbar-left">
+            <div class="map-stat-badge">
+              <span class="map-stat-dot">●</span>
+              <span id="map-status-text">Plotting observations...</span>
+            </div>
+            <div class="map-order-toggles">
+              <label class="map-order-toggle ephem active" data-order="Ephemeroptera" title="Toggle Mayfly observations">
+                <span class="order-dot ephem"></span>
+                <span>Ephemeroptera</span>
+              </label>
+              <label class="map-order-toggle plecop active" data-order="Plecoptera" title="Toggle Stonefly observations">
+                <span class="order-dot plecop"></span>
+                <span>Plecoptera</span>
+              </label>
+              <label class="map-order-toggle trichop active" data-order="Trichoptera" title="Toggle Caddisfly observations">
+                <span class="order-dot trichop"></span>
+                <span>Trichoptera</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="map-toolbar-right">
+            <span class="map-stat-badge" style="font-size:0.78rem; opacity:0.85;">🛰️ Satellite Mode</span>
+            <button class="btn-icon-sm" id="map-btn-fit" title="Fit All Points on Screen">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+              </svg>
+              <span>Fit Bounds</span>
+            </button>
+            <button class="btn-icon-sm" id="map-btn-fullscreen" title="Toggle Fullscreen Map">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <polyline points="9 21 3 21 3 15"></polyline>
+                <line x1="21" y1="3" x2="14" y2="10"></line>
+                <line x1="3" y1="21" x2="10" y2="14"></line>
+              </svg>
+              <span>Fullscreen</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="curated-map-container" class="leaflet-map-canvas"></div>
+        <div class="map-footnote">
+          <span>💡 Tip: Click cluster circles to expand localized regions, or click individual pins to preview photo and biological annotations.</span>
+          <button class="map-load-all-btn" id="map-btn-load-all" style="display:none;">Plot all points</button>
         </div>
       </div>
 
@@ -285,7 +409,7 @@
     <!-- -------------------------------------------------------
          TAB 2: Excluded Observations
          ------------------------------------------------------- -->
-    <section class="tab-pane" id="tab-pane-excluded">
+    <section class="tab-pane" id="tab-pane-excluded" role="tabpanel" tabindex="0" aria-labelledby="tab-nav-excluded">
 
       <div class="controls-container" id="excluded-controls">
         <div class="search-row">
@@ -348,7 +472,7 @@
     <!-- -------------------------------------------------------
          TAB 3: Contributor Lookup & Acknowledgments
          ------------------------------------------------------- -->
-    <section class="tab-pane" id="tab-pane-contributors">
+    <section class="tab-pane" id="tab-pane-contributors" role="tabpanel" tabindex="0" aria-labelledby="tab-nav-contributors">
 
       <div class="contributor-hero">
         <h2>iNaturalist Contributor Lookup & Acknowledgments</h2>
@@ -382,7 +506,7 @@
     <!-- -------------------------------------------------------
          TAB 4: About & Metadata
          ------------------------------------------------------- -->
-    <section class="tab-pane" id="tab-pane-about">
+    <section class="tab-pane" id="tab-pane-about" role="tabpanel" tabindex="0" aria-labelledby="tab-nav-about">
       <div class="controls-container" style="max-width:960px; margin:0 auto; padding:2rem;">
         <h2 style="margin-bottom:1rem;">About the ETF-EPT-iNat-2025 Visualizer</h2>
         <p style="color:var(--text-secondary); margin-bottom:1.25rem; line-height:1.7;">
@@ -484,8 +608,12 @@
     </div>
   </footer>
 
+  <!-- Leaflet & MarkerCluster Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
   <!-- Main Application Script -->
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=3"></script>
 </body>
 
 </html>
