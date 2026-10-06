@@ -1,5 +1,5 @@
 {
-  "totalObservations": 78259,
+  "totalObservations": 78258,
   "columns": [
     "observation_id",
     "taxon_order_id",
@@ -20,33 +20,33 @@
   ],
   "counts": {
     "byOrder": {
-      "Ephemeroptera": 28479,
+      "Ephemeroptera": 28478,
       "Plecoptera": 13130,
       "Trichoptera": 36650
     },
     "byStage": {
       "Immature": 8159,
-      "Adult": 70073,
+      "Adult": 70072,
       "Eggs": 27
     },
     "byQuality": {
-      "needs_id": 71465,
+      "needs_id": 71464,
       "research": 6794
     },
     "byTechnique": {
       "Under microscope": 1842,
-      "No technique": 53958,
+      "No technique": 53957,
       "In net or container": 3382,
       "From light trap": 19077
     },
     "byEvidence": {
       "Organism": 76697,
-      "Nymph to adult exuviae": 889,
+      "Nymph to adult exuviae": 888,
       "Nymph-related evidence": 646,
       "Eggs": 27
     },
     "byLicense": {
-      "cc-by-nc": 66705,
+      "cc-by-nc": 66704,
       "cc0": 3728,
       "cc-by": 7826
     }
