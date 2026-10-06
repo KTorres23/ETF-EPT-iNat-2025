@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script compiles the final ETF-EPT-iNat-2025 dataset, metadata, and excluded-observations dataset
-date: 2026-09-21 # last modified
+date: 2026-10-06 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -84,10 +84,15 @@ ETF_EPT_iNat_2025 <- final_data |>
 ### Pull out observation 8413237
 # During 303 validation script, this observation was incorrectly identified
 # as Ephemeroptera, instead of Plecoptera
-incorrect_obs <- ETF_EPT_iNat_2025 |> filter(observation_id == 8413237)
+### Pull out observation 118536515
+# During data exploration, this observeration was found to be
+# incorrectly identified as Ephemeroptera, instead of Zygoptera
+incorrect_obs <- ETF_EPT_iNat_2025 |> # filter(observation_id == 8413237) |>
+  filter(observation_id %in% c(8413237, 118536515))
 
 # Final dataset
-ETF_EPT_iNat_2025 <- ETF_EPT_iNat_2025 |> filter_out(observation_id == 8413237)
+ETF_EPT_iNat_2025 <- ETF_EPT_iNat_2025 |> #filter_out(observation_id == 8413237) |>
+  filter_out(observation_id %in% c(8413237, 118536515))
 ```
 
 
@@ -140,9 +145,7 @@ excluded_observations <- reject_data |>
     observer_id = user.id
   )
 
-### Add in observation 8413237
-# During 303 validation script, this observation was incorrectly identified
-# as Ephemeroptera, instead of Plecoptera
+### Add in observation 8413237 & 118536515
 incorrect_obs_to_add <- incorrect_obs |>
   select(
     taxon_order_id:inaturalist_url,
@@ -155,7 +158,12 @@ incorrect_obs_to_add <- incorrect_obs |>
     cannot_identify = TRUE,
     inat_id_corrected = TRUE,
     obs_issues = "Incorrect order-level ID",
-    order_id_corrected = "Plecoptera"
+    order_id_corrected = NA,
+    order_id_corrected = case_when(
+      observation_id == 8413237 ~ "Plecoptera",
+      observation_id == 118536515 ~ "Zygoptera",
+      .default = order_id_corrected # Keeps original value if not matched
+    )
   )
 
 # Final dataset
