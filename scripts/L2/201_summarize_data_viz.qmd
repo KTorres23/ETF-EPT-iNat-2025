@@ -11,7 +11,7 @@ format:
   html:
     embed-resources: true
 abstract: This script creates visualizations of my final data used for modelling and analyses.
-date: 2026-09-21 # last modified
+date: 2026-10-06 # last modified
 date-format: "yyyy-MM-dd"
 ---
 
@@ -242,6 +242,8 @@ clean_ETF_EPT_totals <- clean_ETF_EPT |>
 ```{r}
 #| label: get-num-spp-final-ETF
 final_ETF_EPT_totals <- final_ETF_EPT |>
+  ### pull out incorrect observation ID
+  filter(!observation_id %in% c(8413237, 118536515)) |>
   group_by(species, life_stage) |>
   # Summarize # obs, plec, tric
   summarize(num_obs_stage = n()) |>
@@ -320,6 +322,8 @@ rm(
 #| label: read-inat-metadata
 # Join in iNat metadata
 final_ETF_EPT_metadata <- final_ETF_EPT |>
+  ### pull out incorrect observation ID
+  filter(!observation_id %in% c(8413237, 118536515)) |>
   select(species, life_stage, observation_id) |>
   left_join(
     # Read in iNat metadata
@@ -397,7 +401,14 @@ rm(
 ```{r}
 #| label: prep-research-grade
 base_reference <- final_ETF_EPT_metadata |>
-  dplyr::filter_out(life_stage == "eggs") |>
+  ### pull out incorrect observation ID
+  filter(!observation_id %in% c(8413237, 118536515)) |>
+  mutate(
+    life_stage = case_when(
+      life_stage %in% c("Immature", "Eggs") ~ "Immature",
+      .default = life_stage
+    )
+  ) |>
   mutate(
     species = str_trim(species),
     life_stage = str_to_title(life_stage),
@@ -852,7 +863,7 @@ one_ids <- combined_ids_ann |>
   pull()
 
 prop_one_ids <- one_ids / num_obs_study * 100
-print(prop_one_ids) # 50.69%
+print(prop_one_ids) # 50.68%
 ```
 
 ```{r}
@@ -869,8 +880,8 @@ unique_users <- ETF_EPT_users |>
   summarize(num_contributers = n_distinct(all_user_ids), .groups = "drop")
 print(unique_users)
 # 1,468 annotators
-# 17,814 identifiers
-# 16,901 observers
+# 17,812 identifiers
+# 16,899 observers
 ```
 
 ```{r}
@@ -882,8 +893,8 @@ unique_life_stages <- ETF_EPT_obs_status |>
 
 prop_immature <- unique_life_stages / num_obs_study * 100
 prop_adult <- 100 - prop_immature
-print(prop_immature) #10.43%
-print(prop_adult) #89.57%
+print(prop_immature) #10.5%
+print(prop_adult) #89.5%
 ```
 
 ```{r}
@@ -1145,6 +1156,8 @@ etf_ept_gbif_sf <- st_read(file.path(gbif_save_dir, "201_ETF_EPT_GBIF.shp"))
 #| label: read-ETF-iNat-data
 # Read in iNat Data
 final_ETF_EPT_sf <- final_ETF_EPT |>
+  ## Pull out incorrect observation ID
+  filter(!observation_id %in% c(8413237, 118536515)) |>
   ## Remove Research-Grade observations from ETF-EPT-iNat-2025 dataset
   ## since these research obs should be in the GBIF dataset already
   left_join(

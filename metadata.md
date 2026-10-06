@@ -26,13 +26,13 @@ Data paper citation: *[complete upon acceptance]* **TO DO**
 
 version: 1.0.0
 
-latest update: 2026-09-22
+latest update: 2026-10-06
 
 latest archive date: **TO DO**
 
-metadata status: 2026-09-22
+metadata status: 2026-10-06
 
-data verification: Last QA/QC analysis 2026-09-19
+data verification: Last QA/QC analysis 2026-10-06
 
 
 # Research Origin Descriptors
@@ -82,7 +82,7 @@ Using the EPT Image Annotation Tool (software described in [Other](#other)), inf
 
 *Order-level taxonomic identification.* Every observation was validated with order-level taxonomic identification using diagnostic morphological characters unique to the order. Observations that could not be identified due to image quality or observer uncertainty were flagged for removal from the final dataset. Observations incorrectly classified as EPT were flagged for removal and subsequently updated with an identification on iNaturalist through the account of the same author (iNaturalist username: @kmtorres).
 
-*Ontogeny.* Observations were classified as "immature" by the presence of aquatic features, such as external gills, immature wing pads, and aquatic-adapted appendages, and "adult" by the presence of developed terrestrial wings (including subimago Ephemeroptera and wingless or reduced-winged Plecoptera). If a life stage could not be classified from the image due to image quality or observer uncertainty, the observation was flagged for removal from the final dataset.
+*Ontogeny.* Observations were classified as "immature" by the presence of aquatic features, such as external gills, immature wing pads, and aquatic-adapted appendages, and "adult" by the presence of developed terrestrial wings (including subimago Ephemeroptera and wingless or reduced-winged Plecoptera). If a life stage could not be classified from the image due to image quality or observer uncertainty, the observation was flagged for removal from the final dataset. Images containing Trichoptera eggs were classified separately as "eggs"
 
 *Evidence.* Observations containing only physical evidence of an organism (e.g., Trichoptera larval cases, Ephemeroptera exuviae) were denoted with evidence classification category based on the life stage assignment. For example, an image of Ephemeroptera exuviae, where a nymph had emerged as a winged subimago, was classified as "nymph to adult exuviae."
 
@@ -118,16 +118,16 @@ After EPT observations were examined to confirm taxonomic identification and lab
 
 A validation analysis of taxonomic identification was conducted on the ETF-EPT-iNat-2025 dataset to demonstrate the accuracy of the order-level identifications. Approximately 10% of the Ephemeroptera identifications from the dataset were added back to the original observations on iNaturalist through the API (api.inaturalist.org/v1/identifications). All identifications were uploaded through the same author's iNaturalist account (@kmtorres) with either no comment or “Supporting order-level identification, not necessarily disagreeing with finer resolutions.” The comment was added to ensure users were aware of the reason that the order-level identification was added, particularly for cases where the observation already contained finer taxonomic identifications. Five weeks after these supporting identifications were added, the observations were retrieved from the iNaturalist API to assess the change in the taxonomic identification at the order-level. Adding identifications to an observation can increase the probability of being seen by identifiers again, potentially allowing for reevaluation of incorrect identifications or improved finer taxonomic resolution. Therefore, changes in taxon community consensus (i.e., 2/3 of identifiers agree with the identification) after adding such identifications can reveal the accuracy of the ETF-EPT-iNat-2025 dataset through the same community identification mechanism under which iNaturalist uses to establish research grade observations for curation in GBIF. The effect of adding identifications back to iNaturalist was quantified by the change in taxonomic consensus since retrieving original observation data (February 2026) and adding order-level identifications (July 2026). 
 
-From this validation analysis, one observation was incorrectly identified as Ephemeroptera during the annotation process, suggesting a ~0.01% error in identification accuracy of the ETF-EPT-iNat-2025 dataset at the order-level. This observation was subsequently removed from the ETF-EPT-iNat-2025 dataset and added to the excluded-observations dataset.
+From this validation analysis, two observations were incorrectly identified as Ephemeroptera during the annotation process, suggesting a <0.01% error in identification accuracy of the ETF-EPT-iNat-2025 dataset at the order-level. These observations were subsequently removed from the ETF-EPT-iNat-2025 dataset and added to the excluded-observations dataset.
 
-Data anomalies: After the annotation process and validation analysis, 370 observations (<0.5%) were excluded from the ETF-EPT-iNat-2025 dataset and subsequently curated in the excluded-observations dataset. Most exclusions were caused by incorrect identifications at the order-level ([Fig. 2A](data/L2/201_data_summary_figures/201_figure2_excluded_data.png)). Considering many observations originally contained only 1 or 2 identifications on iNaturalist ([Fig. 2B](data/L2/201_data_summary_figures/201_figure2_excluded_data.png)), the error in identifications of the ETF-EPT-iNat-2025 dataset should be low across all three aquatic insect orders.
+Data anomalies: After the annotation process and validation analysis, 371 observations (<0.5%) were excluded from the ETF-EPT-iNat-2025 dataset and subsequently curated in the excluded-observations dataset. Most exclusions were caused by incorrect identifications at the order-level ([Fig. 2A](data/L2/201_data_summary_figures/201_figure2_excluded_data.png)). Considering many observations originally contained only 1 or 2 identifications on iNaturalist ([Fig. 2B](data/L2/201_data_summary_figures/201_figure2_excluded_data.png)), the error in identifications of the ETF-EPT-iNat-2025 dataset should be low across all three aquatic insect orders.
 
 
 ### Other
 
 Related materials: 
 
-We recognize the contributions of 19,049 participatory scientists on iNaturalist whose observations, identifications, and annotations made this dataset possible. [203a_ETF_EPT_inat_users.csv](data/L2/203a_ETF_EPT_inat_users.csv) contains a list of unique iNaturalist users by their `user.id` key (we did not include user names or handles because they are dynamic). [203b_ETF_EPT_inat_contributed_info.csv](data/L2/203b_ETF_EPT_inat_contributed_info.csv) contains the unique identifier for each contribution type and associated user.id key (columns `id`, `contribution_type`, `user.id`, respectively)
+We recognize the contributions of 19,047 participatory scientists on iNaturalist whose observations, identifications, and annotations made this dataset possible. [203a_ETF_EPT_inat_users.csv](data/L2/203a_ETF_EPT_inat_users.csv) contains a list of unique iNaturalist users by their `user.id` key (we did not include user names or handles because they are dynamic). [203b_ETF_EPT_inat_contributed_info.csv](data/L2/203b_ETF_EPT_inat_contributed_info.csv) contains the unique identifier for each contribution type and associated user.id key (columns `id`, `contribution_type`, `user.id`, respectively)
 
 To demonstrate how the ETF-EPT-iNat-2025 dataset improves spatiotemporal distribution of existing records on GBIF, occurrence records of EPT were obtained from GBIF (GBIF.org, 2026) using the R package rgbif (Chamberlain et al., 2026; Chamberlain & Boettiger, 2017). The GBIF query included all present occurrence records of EPT with geospatial coordinates that did not have issues. The geographic distribution of the GBIF dataset within the study extent were compared to the distribution of the ETF-EPT-iNat-2025 dataset by summarizing the number of records in 50km hexagonal grids across the Eastern Temperate Forests ecoregion. Research grade observations from the ETF-EPT-iNat-2025 dataset were removed prior to data summaries because this data should already be curated as a record in GBIF. The count of observations, number of grid cells, and visualizations of the differences between GBIF records and iNaturalist observations were examined to identify where and how the ETF-EPT-iNat-2025 dataset addresses data gaps for each aquatic insect order. 
 
@@ -277,7 +277,7 @@ Related publications and results: [*add paper DOI upon acceptance*] **TO DO**
 
 ## History of Usage:
 
-Data set update history: No dataset updates as of 2026-09-22
+Data set update history: No dataset updates as of 2026-10-06
 
 Review history: [tenatively, will be described based on reviewer revisions] **TO DO** 
 

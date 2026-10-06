@@ -52,6 +52,8 @@ ETF_EPT_inat_df <- readRDS(here(
 
 # Join iNat metadata to study observations
 ETF_EPT_metadata_df <- ETF_EPT_inat_df |>
+  ## Pull out incorrect observation ids
+  filter(!observation_id %in% c(8413237, 118536515)) |>
   select(species, life_stage, observation_id, evidence_type) |>
   left_join(
     # Read in iNat metadata
