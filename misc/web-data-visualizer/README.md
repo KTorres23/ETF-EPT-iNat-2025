@@ -15,6 +15,14 @@ Designed for hosting on **GitHub Pages** with zero build-tool dependencies.
   - Group-by functionality (group by Order, Life Stage, Collection Technique, Quality Grade).
   - Configurable pagination (12, 20, 50, 100 observations per page).
   - Full detail modal showcasing all 23 dataset columns, high-resolution photo viewer, clickable geographic GPS coordinates, and direct links to iNaturalist.
+- **Geospatial Map Visualization**:
+  - Interactive Leaflet & MarkerCluster mapping engine seamlessly integrated with dataset filters.
+  - Dedicated **"Visualize on Map"** action button and **Cards / Map View** switcher in the explorer toolbar.
+  - Primary navigation **"Geospatial Map"** tab for direct access.
+  - Color-coded pins and glowing cluster bubbles for **Ephemeroptera** (emerald), **Plecoptera** (sapphire), and **Trichoptera** (violet).
+  - High-resolution Satellite Imagery (Esri World Imagery + World Boundaries & Places reference) with zero API keys or watermarks.
+  - Interactive popups displaying observation photos, taxonomy badges, life stage annotations, coordinates, and "View Details" modal links.
+  - "View on Map" quick-locate button inside each observation's detail modal.
 - **Excluded Observations Explorer (`excluded-observations.csv`)**:
   - Browse quality-controlled and excluded observations (371 records).
   - Filter and inspect exclusion issue reasons (`obs_issues`) such as *Incorrect order-level ID*, *Duplicate image*, *Uncertain ID*, *Missing image*, and *Copyright image*.

@@ -85,9 +85,15 @@ export class ModalManager {
       : '';
 
     // Geospatial map coordinates link
-    const hasCoords = obs.lat && obs.long;
+    const hasCoords = obs.lat != null && obs.long != null && !isNaN(obs.lat) && !isNaN(obs.long);
     const mapLinkHtml = hasCoords
-      ? `<a href="https://www.google.com/maps?q=${obs.lat},${obs.long}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-sky); text-decoration:underline;">${obs.lat}, ${obs.long} ↗</a>`
+      ? `<div style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
+          <a href="https://www.google.com/maps?q=${obs.lat},${obs.long}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-sky); text-decoration:underline;">${Number(obs.lat).toFixed(4)}, ${Number(obs.long).toFixed(4)} ↗</a>
+          <button class="btn-inline-map" id="modal-locate-map-btn" title="View location on visualizer interactive map">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+            <span>View on Map</span>
+          </button>
+        </div>`
       : 'Not available';
 
     // Flags formatting
@@ -154,6 +160,17 @@ export class ModalManager {
         </div>
       </div>
     `;
+
+    const locateBtn = this.backdropEl.querySelector('#modal-locate-map-btn');
+    if (locateBtn) {
+      locateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.close();
+        if (this.onLocateOnMap) {
+          this.onLocateOnMap(obs);
+        }
+      });
+    }
 
     this.backdropEl.classList.add('active');
     document.body.style.overflow = 'hidden';

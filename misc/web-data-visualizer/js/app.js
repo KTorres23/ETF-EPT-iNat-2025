@@ -9,12 +9,24 @@ import { CardsRenderer } from './cardsRenderer.js';
 import { PaginationService } from './paginationService.js';
 import { ModalManager } from './modalManager.js';
 import { ContributorService } from './contributorService.js';
+import { MapManager } from './mapManager.js?v=2';
 
 class App {
   constructor() {
     this.activeTab = 'curated';
+    this.currentCuratedViewMode = 'cards'; // 'cards' or 'map'
     this.dataService = new DataService();
     this.modalManager = new ModalManager();
+
+    // Map Manager
+    this.mapManager = new MapManager('curated-map-container', (obs) => {
+      this.modalManager.show(obs, false);
+    });
+
+    this.modalManager.onLocateOnMap = (obs) => {
+      this.switchTab('map');
+      this.mapManager.locateObservation(obs);
+    };
 
     // Curated tab state
     this.curatedFilter = new FilterService();
@@ -72,7 +84,17 @@ class App {
           <span style="color:var(--color-success); font-weight:600;">● Live (${fullObs.length.toLocaleString()} observations loaded)</span>
         `;
       }
-      this.renderCuratedView();
+      const tabMapCount = document.getElementById('tab-map-count');
+      if (tabMapCount) tabMapCount.textContent = fullObs.length.toLocaleString();
+      const btnMapBadge = document.getElementById('btn-map-badge');
+      if (btnMapBadge) btnMapBadge.textContent = fullObs.length.toLocaleString();
+
+      if (this.currentCuratedViewMode === 'map') {
+        const filterResult = this.curatedFilter.apply(fullObs);
+        this.mapManager.updateObservations(filterResult.items);
+      } else {
+        this.renderCuratedView();
+      }
     });
 
     // Preload excluded observations & contributors
@@ -96,40 +118,160 @@ class App {
         const next = cur === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('etf_ept_theme', next);
+        if (this.mapManager) {
+          this.mapManager.handleThemeChange(next);
+        }
       });
     }
   }
 
   /* -----------------------------------------------------------
-     Tab Switching
+     Tab Switching & Navigation Accessibility
      ----------------------------------------------------------- */
   initTabs() {
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    tabButtons.forEach(btn => {
+    const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
+    const navInner = document.querySelector('.tabs-nav-inner');
+    const scrollWrapper = document.getElementById('tabs-scroll-wrapper');
+    const scrollLeftBtn = document.getElementById('tabs-scroll-left');
+    const scrollRightBtn = document.getElementById('tabs-scroll-right');
+
+    // Dynamically calculate header height for sticky positioning
+    const updateHeaderOffset = () => {
+      const header = document.querySelector('.app-header');
+      if (header) {
+        document.documentElement.style.setProperty('--header-actual-height', `${header.offsetHeight}px`);
+      }
+    };
+    window.addEventListener('resize', updateHeaderOffset, { passive: true });
+    updateHeaderOffset();
+
+    // Horizontal overflow scroll indicators & buttons
+    const updateScrollIndicators = () => {
+      if (!navInner) return;
+      const maxScroll = navInner.scrollWidth - navInner.clientWidth;
+      const hasOverflow = maxScroll > 4;
+
+      if (!hasOverflow) {
+        if (scrollLeftBtn) scrollLeftBtn.classList.remove('visible');
+        if (scrollRightBtn) scrollRightBtn.classList.remove('visible');
+        if (scrollWrapper) {
+          scrollWrapper.classList.remove('can-scroll-left', 'can-scroll-right');
+        }
+      } else {
+        const canLeft = navInner.scrollLeft > 6;
+        const canRight = navInner.scrollLeft < maxScroll - 6;
+
+        if (scrollLeftBtn) scrollLeftBtn.classList.toggle('visible', canLeft);
+        if (scrollRightBtn) scrollRightBtn.classList.toggle('visible', canRight);
+        if (scrollWrapper) {
+          scrollWrapper.classList.toggle('can-scroll-left', canLeft);
+          scrollWrapper.classList.toggle('can-scroll-right', canRight);
+        }
+      }
+    };
+
+    if (navInner) {
+      navInner.addEventListener('scroll', updateScrollIndicators, { passive: true });
+      window.addEventListener('resize', updateScrollIndicators, { passive: true });
+      // Call after fonts and layout settle
+      setTimeout(updateScrollIndicators, 200);
+    }
+
+    if (scrollLeftBtn && navInner) {
+      scrollLeftBtn.addEventListener('click', () => {
+        navInner.scrollBy({ left: -220, behavior: 'smooth' });
+      });
+    }
+
+    if (scrollRightBtn && navInner) {
+      scrollRightBtn.addEventListener('click', () => {
+        navInner.scrollBy({ left: 220, behavior: 'smooth' });
+      });
+    }
+
+    // Keyboard navigation and click handling (WAI-ARIA Tablist Pattern)
+    tabButtons.forEach((btn, index) => {
       btn.addEventListener('click', () => {
         const targetTab = btn.getAttribute('data-tab');
         this.switchTab(targetTab);
+        btn.focus();
       });
+
+      btn.addEventListener('keydown', (e) => {
+        let targetIndex = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          targetIndex = (index + 1) % tabButtons.length;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          targetIndex = (index - 1 + tabButtons.length) % tabButtons.length;
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          targetIndex = 0;
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          targetIndex = tabButtons.length - 1;
+        }
+
+        if (targetIndex !== -1) {
+          const nextBtn = tabButtons[targetIndex];
+          nextBtn.focus();
+          const nextTab = nextBtn.getAttribute('data-tab');
+          this.switchTab(nextTab);
+        }
+      });
+    });
+  }
+
+  updateTabButtons(activeTabId) {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    tabButtons.forEach(btn => {
+      const isMatch = btn.getAttribute('data-tab') === activeTabId;
+      btn.classList.toggle('active', isMatch);
+      btn.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+      btn.setAttribute('tabindex', isMatch ? '0' : '-1');
+
+      if (isMatch) {
+        // Smoothly bring active tab into view for narrow/mobile screens
+        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
     });
   }
 
   switchTab(tabId) {
     this.activeTab = tabId;
 
-    // Update buttons
-    document.querySelectorAll('.tab-btn').forEach(b => {
-      b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
-    });
+    if (tabId === 'map') {
+      this.updateTabButtons('map');
+      document.querySelectorAll('.tab-pane').forEach(p => {
+        const isCurated = p.id === 'tab-pane-curated';
+        p.classList.toggle('active', isCurated);
+        if (isCurated) p.setAttribute('aria-labelledby', 'tab-nav-map');
+      });
+      this.setCuratedViewMode('map');
+      return;
+    }
 
-    // Update panes
-    document.querySelectorAll('.tab-pane').forEach(p => {
-      p.classList.toggle('active', p.id === `tab-pane-${tabId}`);
-    });
-
-    // Trigger tab-specific render
     if (tabId === 'curated') {
-      this.renderCuratedView();
-    } else if (tabId === 'excluded') {
+      this.updateTabButtons('curated');
+      document.querySelectorAll('.tab-pane').forEach(p => {
+        const isCurated = p.id === 'tab-pane-curated';
+        p.classList.toggle('active', isCurated);
+        if (isCurated) p.setAttribute('aria-labelledby', 'tab-nav-curated');
+      });
+      this.setCuratedViewMode('cards');
+      return;
+    }
+
+    // Other tabs: excluded, contributors, about
+    this.updateTabButtons(tabId);
+    document.querySelectorAll('.tab-pane').forEach(p => {
+      const isMatch = p.id === `tab-pane-${tabId}`;
+      p.classList.toggle('active', isMatch);
+      if (isMatch) p.setAttribute('aria-labelledby', `tab-nav-${tabId}`);
+    });
+
+    if (tabId === 'excluded') {
       this.renderExcludedView();
     }
   }
@@ -281,6 +423,30 @@ class App {
       });
     }
 
+    // Visualize on map button
+    const mapBtn = document.getElementById('curated-btn-map');
+    if (mapBtn) {
+      mapBtn.addEventListener('click', () => {
+        this.setCuratedViewMode('map');
+        const mapEl = document.getElementById('curated-map-view');
+        if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+
+    // View Switcher buttons
+    const btnViewCards = document.getElementById('btn-view-cards');
+    const btnViewMap = document.getElementById('btn-view-map');
+    if (btnViewCards) {
+      btnViewCards.addEventListener('click', () => {
+        this.setCuratedViewMode('cards');
+      });
+    }
+    if (btnViewMap) {
+      btnViewMap.addEventListener('click', () => {
+        this.setCuratedViewMode('map');
+      });
+    }
+
     // Reset button
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
@@ -294,9 +460,60 @@ class App {
         if (filterQuality) filterQuality.value = '';
         if (groupBy) groupBy.value = 'none';
         document.querySelectorAll('#curated-controls .toggle-chip').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.map-order-toggle').forEach(c => c.classList.add('active'));
+        if (this.mapManager) {
+          this.mapManager.activeOrderFilters = { Ephemeroptera: true, Plecoptera: true, Trichoptera: true };
+        }
         this.curatedPagination.currentPage = 1;
         this.renderCuratedView();
       });
+    }
+  }
+
+  setCuratedViewMode(mode) {
+    this.currentCuratedViewMode = mode;
+    const cardsGrid = document.getElementById('curated-cards-grid');
+    const pagination = document.getElementById('curated-pagination');
+    const mapView = document.getElementById('curated-map-view');
+    const btnCards = document.getElementById('btn-view-cards');
+    const btnMap = document.getElementById('btn-view-map');
+
+    if (mode === 'map') {
+      if (cardsGrid) cardsGrid.style.display = 'none';
+      if (pagination) pagination.style.display = 'none';
+      if (mapView) mapView.style.display = 'flex';
+      if (btnCards) btnCards.classList.remove('active');
+      if (btnMap) btnMap.classList.add('active');
+
+      if (this.activeTab === 'curated' || this.activeTab === 'map') {
+        this.activeTab = 'map';
+        this.updateTabButtons('map');
+        const curatedPane = document.getElementById('tab-pane-curated');
+        if (curatedPane) curatedPane.setAttribute('aria-labelledby', 'tab-nav-map');
+      }
+
+      const filterResult = this.curatedFilter.apply(this.dataService.curatedObservations);
+      this.mapManager.updateObservations(filterResult.items);
+      setTimeout(() => {
+        if (this.mapManager.map) {
+          this.mapManager.map.invalidateSize();
+        }
+      }, 150);
+    } else {
+      if (cardsGrid) cardsGrid.style.display = 'grid';
+      if (pagination) pagination.style.display = 'flex';
+      if (mapView) mapView.style.display = 'none';
+      if (btnCards) btnCards.classList.add('active');
+      if (btnMap) btnMap.classList.remove('active');
+
+      if (this.activeTab === 'curated' || this.activeTab === 'map') {
+        this.activeTab = 'curated';
+        this.updateTabButtons('curated');
+        const curatedPane = document.getElementById('tab-pane-curated');
+        if (curatedPane) curatedPane.setAttribute('aria-labelledby', 'tab-nav-curated');
+      }
+
+      this.renderCuratedView();
     }
   }
 
@@ -304,6 +521,7 @@ class App {
     const grid = document.getElementById('curated-cards-grid');
     const paginationEl = document.getElementById('curated-pagination');
     const countEl = document.getElementById('curated-results-count');
+    const mapBadge = document.getElementById('btn-map-badge');
     if (!grid) return;
 
     const data = this.dataService.curatedObservations;
@@ -311,6 +529,16 @@ class App {
 
     if (countEl) {
       countEl.innerHTML = `Showing <strong>${filterResult.total.toLocaleString()}</strong> of <strong>${data.length.toLocaleString()}</strong> observations`;
+    }
+
+    if (mapBadge) {
+      mapBadge.textContent = filterResult.total.toLocaleString();
+    }
+
+    // If currently in map view, update map and return
+    if (this.currentCuratedViewMode === 'map') {
+      this.mapManager.updateObservations(filterResult.items);
+      return;
     }
 
     grid.innerHTML = '';
