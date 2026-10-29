@@ -454,43 +454,6 @@ ETF_EPT_obs_status <- base_reference |>
     grade_fill_key = paste(species, life_stage, quality_grade, sep = " - ")
   ) |>
   arrange(species, life_stage, quality_grade)
-
-species_summary <- base_reference |>
-  count(species, name = "num_obs_spp") |>
-  mutate(
-    prop_species = num_obs_spp / sum(num_obs_spp),
-    taxa_label = paste0(
-      species,
-      "\n",
-      str_trim(format(as.numeric(num_obs_spp), big.mark = ","))
-    )
-  )
-
-lifestage_summary <- base_reference |>
-  count(species, life_stage, name = "num_obs_stage") |>
-  mutate(
-    prop_ls = num_obs_stage / sum(num_obs_stage),
-    ls_label = paste0(
-      life_stage,
-      "\n",
-      str_trim(format(as.numeric(num_obs_stage), big.mark = ","))
-    ),
-    ls_fill_key = paste(species, life_stage, sep = " - ")
-  ) |>
-  arrange(species, life_stage)
-
-grade_summary <- base_reference |>
-  count(species, quality_grade, name = "num_obs_grade") |>
-  mutate(
-    prop_grade = num_obs_grade / sum(num_obs_grade),
-    grade_label = paste0(
-      quality_grade,
-      "\n",
-      str_trim(format(as.numeric(num_obs_grade), big.mark = ","))
-    ),
-    grade_fill_key = paste(species, quality_grade, sep = " - ")
-  ) |>
-  arrange(species, quality_grade)
 ```
 
 ```{r}
@@ -516,113 +479,172 @@ ETF_EPT_ann_count <- final_ETF_EPT_metadata |>
 ### create viz
 
 ```{r}
-#| label: figure1-rg-sunburst
-## Fig 1a - Species + life stage
+#| label: figure1-stacked-bar
+theme_pub <- theme_classic(base_size = 20) +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    axis.title = element_text(face = "bold"),
+    legend.title = element_text(face = "bold", size = 20),
+    legend.position = "top",
+    plot.title = element_text(face = "bold", hjust = 0)
+  )
 
-p_lifestage <- ggplot() +
-  # Ring 1: Species (Center)
-  geom_bar(
-    data = species_summary,
-    aes(x = 1, y = prop_species, fill = species),
-    stat = "identity",
-    width = 1.4,
+### Panel A: Count by order, color by life stage
+# Get labels for plot
+a_labels <- base_reference |>
+  count(species, life_stage) |>
+  group_by(species) |>
+  mutate(
+    total_order = sum(n),
+    pct = n / total_order * 100,
+    label_full = comma(n),
+    label_inside = ifelse(pct >= 15, label_full, ""), # Large bars have labels inside
+    label_top = ifelse(pct < 15, label_full, ""), # Small bars have labels on top
+    life_stage = factor(life_stage, levels = c("Immature", "Adult"))
+  ) |>
+  ungroup()
+
+panel_a <- ggplot(a_labels, aes(x = species, y = n, fill = life_stage)) +
+  geom_col(
     position = "stack",
-    color = "white"
+    width = 0.65,
+    color = "white",
+    linewidth = 0.3
   ) +
+  # Inside labels
   geom_text(
-    data = species_summary,
-    aes(x = 0.9, y = prop_species, label = taxa_label, group = species),
+    aes(label = label_inside, group = life_stage),
     position = position_stack(vjust = 0.5),
     size = 6,
     lineheight = 0.85,
-    color = "white",
-    fontface = "bold"
+    alpha = 0.6
   ) +
-  # Ring 2: Life Stage (Outer)
-  geom_bar(
-    data = lifestage_summary,
-    aes(x = 2, y = prop_ls, fill = ls_fill_key),
-    stat = "identity",
-    width = 0.5,
-    position = "stack",
-    color = "white"
-  ) +
+  # Outside labels
   geom_text(
-    data = lifestage_summary,
-    aes(x = 2, y = prop_ls, label = ls_label, group = ls_fill_key),
-    position = position_stack(vjust = 0.5),
-    size = 5,
+    data = subset(a_labels, life_stage == "Immature"),
+    aes(x = species, y = total_order, label = label_top),
+    vjust = -0.3,
+    size = 6,
     lineheight = 0.85,
-    color = "black"
+    alpha = 0.6,
+    inherit.aes = FALSE
   ) +
-  scale_fill_manual(values = custom_colors) +
-  coord_polar(theta = "y", clip = "off") +
-  xlim(0, 2.6) +
-  labs(title = "A. Life Stage") +
-  theme_void() +
-  theme(
-    legend.position = "none",
-    plot.title = element_text(hjust = 0.5, vjust = -8, face = "bold", size = 24)
-  )
-p_lifestage
+  scale_y_continuous(
+    labels = label_comma(),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  scale_fill_manual(values = c("Adult" = "#FFC20A", "Immature" = "#40B0A6")) +
+  labs(
+    x = "Taxonomic Order",
+    y = "Number of Observations",
+    fill = "A. Life Stage"
+  ) +
+  guides(
+    fill = guide_legend(
+      title.position = "top",
+      title.hjust = 0.5,
+      label.position = "top"
+    )
+  ) +
+  theme_pub
+panel_a
+### Panel B: Count by order, colored by quality grade
+# Get labels for plot
+b_labels <- base_reference |>
+  count(species, quality_grade) |>
+  group_by(species) |>
+  mutate(
+    total_order = sum(n),
+    pct = n / total_order * 100,
+    label_full = comma(n),
+    label_inside = ifelse(pct >= 15, label_full, ""), # Large bars have labels inside
+    label_top = ifelse(pct < 15, label_full, ""), # Small bars have labels on top
+    quality_grade = factor(quality_grade, levels = c("Research", "Needs ID"))
+  ) |>
+  ungroup()
 
-### Fig 1b Species + Quality grade
 
-p_grade <- ggplot() +
-  # Ring 1: Species (Center)
-  geom_bar(
-    data = species_summary,
-    aes(x = 1, y = prop_species, fill = species),
-    stat = "identity",
-    width = 1.4,
+# create plot
+panel_b <- ggplot(b_labels, aes(x = species, y = n, fill = quality_grade)) +
+  geom_col(
     position = "stack",
-    color = "white"
+    width = 0.65,
+    color = "white",
+    linewidth = 0.3
   ) +
+  # Inside labels
   geom_text(
-    data = species_summary,
-    aes(x = 0.9, y = prop_species, label = taxa_label, group = species),
+    aes(label = label_inside, group = quality_grade),
     position = position_stack(vjust = 0.5),
     size = 6,
     lineheight = 0.85,
-    color = "white",
-    fontface = "bold"
+    alpha = 0.6
   ) +
-  # Ring 2: Quality Grade (Outer)
-  geom_bar(
-    data = grade_summary,
-    aes(x = 2, y = prop_grade, fill = grade_fill_key),
-    stat = "identity",
-    width = 0.5,
-    position = "stack",
-    color = "white"
-  ) +
+  # Outside labels
   geom_text(
-    data = grade_summary,
-    aes(x = 2, y = prop_grade, label = grade_label, group = grade_fill_key),
-    position = position_stack(vjust = 0.5),
-    size = 5,
+    data = subset(b_labels, quality_grade == "Research"),
+    aes(x = species, y = total_order, label = label_top),
+    vjust = -0.3,
+    size = 6,
     lineheight = 0.85,
-    color = "black"
+    alpha = 0.6,
+    inherit.aes = FALSE
   ) +
-  scale_fill_manual(values = custom_colors) +
-  coord_polar(theta = "y", clip = "off") +
-  xlim(0, 2.6) +
-  labs(title = "B. Observation Quality") +
-  theme_void() +
-  theme(
-    legend.position = "none",
-    plot.title = element_text(hjust = 0.5, vjust = -8, face = "bold", size = 24)
-  )
+  scale_y_continuous(
+    labels = label_comma(),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  scale_fill_manual(
+    values = c("Research" = "#2CA02C", "Needs ID" = "#D9D9D9")
+  ) +
+  labs(
+    x = "Taxonomic Order",
+    y = "Number of Observations",
+    fill = "B. Quality Grade"
+  ) +
+  guides(
+    fill = guide_legend(
+      title.position = "top",
+      title.hjust = 0.5,
+      label.position = "top"
+    )
+  ) +
+  theme_pub
 
-p_grade
+panel_b
 ```
 
 ```{r}
 #| label: figure1-export
-# Combine figure panels
-figure1 <- p_lifestage + p_grade
+### Combine figure panels
+# remove panel A x axis title
+panel_a_clean <- panel_a +
+  labs(x = NULL)
+
+# Remove panel B y-axis text/title and x-axis title
+panel_b_clean <- panel_b +
+  labs(x = NULL, y = NULL) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+figure1 <- (panel_a_clean + panel_b_clean) +
+  plot_layout(ncol = 2) &
+  theme(plot.margin = margin(5, 10, 5, 5))
+
+# Combine with new centered x-axis title
+figure1 <- figure1 +
+  plot_annotation(
+    caption = "Taxonomic Order",
+    theme = theme(
+      plot.caption = element_text(hjust = 0.5, size = 20, face = "bold")
+    )
+  )
+
 figure1
 
+### Save figure 1
 ggsave(
   filename = here(
     L201_figs_dir,
@@ -1474,6 +1496,171 @@ ggsave(
 ```
 
 # legacy code
+
+## alternative figure 1
+
+```{r}
+#| label: alt-fig1-prep-data
+species_summary <- base_reference |>
+  count(species, name = "num_obs_spp") |>
+  mutate(
+    prop_species = num_obs_spp / sum(num_obs_spp),
+    taxa_label = paste0(
+      species,
+      "\n",
+      str_trim(format(as.numeric(num_obs_spp), big.mark = ","))
+    )
+  )
+
+lifestage_summary <- base_reference |>
+  count(species, life_stage, name = "num_obs_stage") |>
+  mutate(
+    prop_ls = num_obs_stage / sum(num_obs_stage),
+    ls_label = paste0(
+      life_stage,
+      "\n",
+      str_trim(format(as.numeric(num_obs_stage), big.mark = ","))
+    ),
+    ls_fill_key = paste(species, life_stage, sep = " - ")
+  ) |>
+  arrange(species, life_stage)
+
+grade_summary <- base_reference |>
+  count(species, quality_grade, name = "num_obs_grade") |>
+  mutate(
+    prop_grade = num_obs_grade / sum(num_obs_grade),
+    grade_label = paste0(
+      quality_grade,
+      "\n",
+      str_trim(format(as.numeric(num_obs_grade), big.mark = ","))
+    ),
+    grade_fill_key = paste(species, quality_grade, sep = " - ")
+  ) |>
+  arrange(species, quality_grade)
+```
+
+```{r}
+#| label: alt-fig1-create-viz
+# alt-figure1-rg-sunburst
+## Fig 1a - Species + life stage
+
+p_lifestage <- ggplot() +
+  # Ring 1: Species (Center)
+  geom_bar(
+    data = species_summary,
+    aes(x = 1, y = prop_species, fill = species),
+    stat = "identity",
+    width = 1.4,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    data = species_summary,
+    aes(x = 0.9, y = prop_species, label = taxa_label, group = species),
+    position = position_stack(vjust = 0.5),
+    size = 6,
+    lineheight = 0.85,
+    color = "white",
+    fontface = "bold"
+  ) +
+  # Ring 2: Life Stage (Outer)
+  geom_bar(
+    data = lifestage_summary,
+    aes(x = 2, y = prop_ls, fill = ls_fill_key),
+    stat = "identity",
+    width = 0.5,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    data = lifestage_summary,
+    aes(x = 2, y = prop_ls, label = ls_label, group = ls_fill_key),
+    position = position_stack(vjust = 0.5),
+    size = 5,
+    lineheight = 0.85,
+    color = "black"
+  ) +
+  scale_fill_manual(values = custom_colors) +
+  coord_polar(theta = "y", clip = "off") +
+  xlim(0, 2.6) +
+  labs(title = "A. Life Stage") +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, vjust = -8, face = "bold", size = 24)
+  )
+p_lifestage
+
+### Fig 1b Species + Quality grade
+
+p_grade <- ggplot() +
+  # Ring 1: Species (Center)
+  geom_bar(
+    data = species_summary,
+    aes(x = 1, y = prop_species, fill = species),
+    stat = "identity",
+    width = 1.4,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    data = species_summary,
+    aes(x = 0.9, y = prop_species, label = taxa_label, group = species),
+    position = position_stack(vjust = 0.5),
+    size = 6,
+    lineheight = 0.85,
+    color = "white",
+    fontface = "bold"
+  ) +
+  # Ring 2: Quality Grade (Outer)
+  geom_bar(
+    data = grade_summary,
+    aes(x = 2, y = prop_grade, fill = grade_fill_key),
+    stat = "identity",
+    width = 0.5,
+    position = "stack",
+    color = "white"
+  ) +
+  geom_text(
+    data = grade_summary,
+    aes(x = 2, y = prop_grade, label = grade_label, group = grade_fill_key),
+    position = position_stack(vjust = 0.5),
+    size = 5,
+    lineheight = 0.85,
+    color = "black"
+  ) +
+  scale_fill_manual(values = custom_colors) +
+  coord_polar(theta = "y", clip = "off") +
+  xlim(0, 2.6) +
+  labs(title = "B. Observation Quality") +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, vjust = -8, face = "bold", size = 24)
+  )
+
+p_grade
+```
+
+```{r}
+#| label: alt-fig1-save-viz
+figure1 <- p_lifestage + p_grade
+figure1
+
+ggsave(
+  filename = here(
+    L201_figs_dir,
+    "201_figure1_inat_obs_taxa_stage_grade.png"
+  ),
+  plot = figure1,
+  width = 16,
+  height = 8,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
 
 ## combined figure 4
 
