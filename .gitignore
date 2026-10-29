@@ -11,3 +11,7 @@ data/L1/101a_images_clean_ETF_EPT_obs.rds
 data/L1/102_other_labels.txt
 data/L2/201_ETF_EPT_GBIF_shp
 data/L3/302_updated_obs.csv
+
+# alternative figures
+static_sunburst_3tier.png
+alt_fig1.png
