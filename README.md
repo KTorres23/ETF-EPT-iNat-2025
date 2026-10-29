@@ -1,4 +1,4 @@
-# ETF-EPT-iNat-2025 Dataset: Aquatic insect records transformed by secondary data from iNaturalist images
+# Aquatic insect records transformed by secondary data from iNaturalist images
 
 ## Identifiers
 
@@ -28,7 +28,7 @@ Project title: ETF-EPT-iNat-2025 Dataset: Aquatic insect records transformed by 
 
 Objectives: Curate a human-verified, annotated dataset enriched by secondary image data called ETF-EPT-iNat-2025, containing aquatic insect iNaturalist observations across the Eastern Temperate Forests of North America from 2000 to 2025 for the orders of Ephemeroptera (mayflies), Plecoptera (stoneflies), and Trichoptera (caddisflies)
 
-Funding: **TO DO**
+Funding: N/A
 
 ## Data Files
 

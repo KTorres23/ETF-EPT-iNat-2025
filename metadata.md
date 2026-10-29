@@ -1,4 +1,4 @@
-# ETF-EPT-iNat-2025 Dataset: Aquatic insect records transformed by secondary data from iNaturalist images
+# Aquatic insect records transformed by secondary data from iNaturalist images
 
 ## Identifiers
 
