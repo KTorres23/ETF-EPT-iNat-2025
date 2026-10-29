@@ -4,7 +4,7 @@
 
 Dataset title: ETF-EPT-iNat-2025
 
-Data identifier DOI: *[complete upon acceptance]* **TO DO**
+Data identifier DOI: [![DOI](https://zenodo.org/badge/1367739125.svg)](https://doi.org/10.5281/zenodo.23783592)
 
 Data paper DOI: *[complete upon acceptance]* **TO DO**
 
@@ -28,7 +28,7 @@ version: 1.0.0
 
 latest update: 2026-10-06
 
-latest archive date: **TO DO**
+latest archive date: 2026-10-29
 
 metadata status: 2026-10-06
 
@@ -43,7 +43,7 @@ Project title: ETF-EPT-iNat-2025 Dataset: Aquatic insect records transformed by 
 
 Objectives: Curate a human-verified, annotated dataset enriched by secondary image data called ETF-EPT-iNat-2025, containing aquatic insect iNaturalist observations across the Eastern Temperate Forests of North America from 2000 to 2025 for the orders of Ephemeroptera (mayflies), Plecoptera (stoneflies), and Trichoptera (caddisflies)
 
-Funding: **TO DO**
+Funding: N/A
 
 
 ## Subproject / Sampling Site Descriptors
@@ -270,7 +270,7 @@ The variable information for the four datasets in [Data File Descriptors](#data-
 
 ## Archiving
 
-Archival procedures: All data and code are [stored on GitHub](github.com/KTorres23/ETF-EPT-iNat-2025) and archived on Zenodo (**TO DO**). 
+Archival procedures: All data and code are [stored on GitHub](github.com/KTorres23/ETF-EPT-iNat-2025) and archived on Zenodo [![DOI](https://zenodo.org/badge/1367739125.svg)](https://doi.org/10.5281/zenodo.23783592). 
 
 Related publications and results: [*add paper DOI upon acceptance*] **TO DO** 
 

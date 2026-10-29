@@ -4,7 +4,7 @@
 
 Dataset title: ETF-EPT-iNat-2025
 
-Data identifier DOI: *[complete upon acceptance]* **TO DO**
+Data identifier DOI: [![DOI](https://zenodo.org/badge/1367739125.svg)](https://doi.org/10.5281/zenodo.23783592)
 
 Data paper DOI: *[complete upon acceptance]* **TO DO**
 
